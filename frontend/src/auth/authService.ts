@@ -3,7 +3,7 @@ import { isUserRole, type UserRole } from "./permissions";
 
 const STORAGE_KEY = "uca.auth.session";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
-const API_BASE = "/api";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
 export interface AuthSession {
   user: AuthUser;
