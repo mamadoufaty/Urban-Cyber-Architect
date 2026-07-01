@@ -1,0 +1,253 @@
+.livrables-page {
+  max-width: 1280px;
+}
+
+.livrables-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1.25rem 0 1.5rem;
+}
+
+.livrables-header h1 {
+  font-size: 1.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.livrables-header p {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.livrables-btn {
+  background: var(--accent);
+  color: #041510;
+  border: none;
+  border-radius: 8px;
+  padding: 0.55rem 0.9rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.livrables-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.livrables-btn-secondary {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.livrables-error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fecaca;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.livrables-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.livrables-list-panel,
+.livrables-preview-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+}
+
+.livrables-list-panel h2,
+.livrables-preview-panel h2 {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.livrables-muted {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.livrables-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.livrables-list-item {
+  width: 100%;
+  text-align: left;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.livrables-list-item.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(0, 212, 170, 0.25);
+}
+
+.livrables-list-item span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.livrables-list-item small {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.livrables-preview-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.livrables-document section {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.livrables-document h3 {
+  font-size: 1.15rem;
+  margin-bottom: 0.35rem;
+}
+
+.livrables-document h4 {
+  font-size: 0.95rem;
+  margin-bottom: 0.35rem;
+  color: var(--accent);
+}
+
+.livrables-document p,
+.livrables-document li {
+  color: var(--text);
+  line-height: 1.5;
+  font-size: 0.9rem;
+}
+
+.livrables-document ul {
+  margin-top: 0.35rem;
+  padding-left: 1.2rem;
+}
+
+.livrables-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.livrables-modal {
+  width: min(100%, 640px);
+  max-height: 90vh;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.livrables-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.livrables-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.livrables-modal-form {
+  padding: 1rem 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.livrables-field,
+.livrables-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.livrables-field span,
+.livrables-fieldset legend {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.livrables-field input,
+.livrables-field select,
+.livrables-field textarea {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.55rem 0.65rem;
+  font-family: var(--font);
+}
+
+.livrables-field textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.livrables-checkboxes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem 0.75rem;
+}
+
+.livrables-checkbox,
+.livrables-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.875rem;
+}
+
+.livrables-format-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.livrables-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 900px) {
+  .livrables-layout {
+    grid-template-columns: 1fr;
+  }
+}

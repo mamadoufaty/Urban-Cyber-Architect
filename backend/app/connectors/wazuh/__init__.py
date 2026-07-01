@@ -1,0 +1,1 @@
+"""Connecteur Wazuh — lecture seule."""

@@ -1,0 +1,35 @@
+name: Smart City
+sector: smart_city
+domains:
+  - Transport
+  - Eau
+  - Energie
+  - Télécoms
+  - Sécurité Publique
+metiers:
+  - Gestion du trafic
+  - Distribution d'eau potable
+  - Réseau électrique intelligent
+  - Infrastructure IoT urbaine
+  - Vidéoprotection et sécurité publique
+processus:
+  - Supervision temps réel des flux
+  - Gestion des incidents citoyens
+  - Maintenance prédictive des équipements
+actifs:
+  - Capteurs IoT
+  - SCADA eau/énergie
+  - Caméras IP
+  - Réseau fibre optique
+menaces:
+  - Compromission capteurs IoT
+  - Attaque sur SCADA
+  - Indisponibilité services critiques
+architectures:
+  - Segmentation OT/IT
+  - SOC municipal
+  - PKI pour objets connectés
+referentials:
+  - NIS2
+  - IEC 62443
+  - RGPD

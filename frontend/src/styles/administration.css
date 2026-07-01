@@ -1,0 +1,132 @@
+.admin-users-page {
+  max-width: 100%;
+}
+
+.admin-users-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.admin-users-header h2 {
+  font-size: 1.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.admin-users-header p {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.admin-users-error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fecaca;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.admin-users-table-wrapper {
+  overflow-x: auto;
+}
+
+.admin-users-table {
+  width: 100%;
+  min-width: 1100px;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.admin-users-table th,
+.admin-users-table td {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.admin-users-table th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--surface2);
+}
+
+.admin-users-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.admin-users-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.admin-status-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.admin-status-badge.active {
+  background: rgba(0, 212, 170, 0.15);
+  color: var(--accent);
+}
+
+.admin-status-badge.disabled {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+.admin-user-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem 1rem;
+}
+
+.admin-user-form-grid .form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.admin-user-form-grid label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.admin-user-form-grid input,
+.admin-user-form-grid select {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.5rem 0.65rem;
+  font-size: 0.875rem;
+}
+
+.admin-user-form-grid input:focus,
+.admin-user-form-grid select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.admin-modal-subtitle {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 720px) {
+  .admin-user-form-grid {
+    grid-template-columns: 1fr;
+  }
+}

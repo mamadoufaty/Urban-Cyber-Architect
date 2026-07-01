@@ -1,0 +1,29 @@
+name: Santé
+sector: sante
+domains:
+  - Dossier Patient
+  - HDS
+metiers:
+  - Soins aux patients
+  - Gestion des dossiers médicaux
+  - Imagerie médicale
+processus:
+  - Admission patient
+  - Prescription et dispensation
+  - Archivage DMP
+actifs:
+  - DPI (Dossier Patient Informatisé)
+  - PACS imagerie
+  - Serveurs HDS
+menaces:
+  - Ransomware hôpital
+  - Accès non autorisé aux dossiers
+  - Indisponibilité urgences
+architectures:
+  - Hébergement HDS certifié
+  - Chiffrement des données de santé
+  - IAM renforcé
+referentials:
+  - HDS
+  - RGPD
+  - ISO 27001

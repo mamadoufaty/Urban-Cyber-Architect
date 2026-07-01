@@ -1,0 +1,30 @@
+name: Industrie
+sector: industrie
+domains:
+  - SCADA
+  - MES
+  - Automates
+metiers:
+  - Production industrielle
+  - Maintenance des équipements
+  - Qualité et traçabilité
+processus:
+  - Pilotage ligne de production
+  - Ordonnancement MES
+  - Supervision automates
+actifs:
+  - Automates PLC
+  - Serveurs SCADA
+  - Réseau industriel
+menaces:
+  - Sabotage production
+  - Intrusion réseau OT
+  - Arrêt non planifié
+architectures:
+  - Purdue model
+  - Bastion OT
+  - Détection anomalies ICS
+referentials:
+  - IEC 62443
+  - ISO 27001
+  - NIS2

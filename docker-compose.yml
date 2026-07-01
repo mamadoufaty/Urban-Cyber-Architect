@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: uca
+      POSTGRES_PASSWORD: uca
+      POSTGRES_DB: urban_cyber_architect
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://uca:uca@db:5432/urban_cyber_architect
+      KNOWLEDGE_BASE_PATH: /knowledge-base
+      DEBUG: "true"
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+      - ./knowledge-base:/knowledge-base
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  pgdata:

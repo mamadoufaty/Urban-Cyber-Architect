@@ -1,0 +1,30 @@
+name: Banque
+sector: banque
+domains:
+  - Paiement
+  - Crédit
+  - SWIFT
+metiers:
+  - Paiements et cartes
+  - Crédit et financement
+  - Opérations internationales
+processus:
+  - Traitement des transactions
+  - Scoring crédit
+  - Transferts SWIFT
+actifs:
+  - Core Banking
+  - Réseau SWIFT
+  - Datacenter principal
+menaces:
+  - Fraude bancaire
+  - Attaque sur SWIFT
+  - Fuite de données clients
+architectures:
+  - Zero Trust banking
+  - SIEM temps réel
+  - PRA géo-redondant
+referentials:
+  - DORA
+  - RGPD
+  - PCI-DSS

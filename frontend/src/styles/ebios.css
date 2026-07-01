@@ -1,0 +1,1028 @@
+/* EBIOS RM — Beta 1.0 design system */
+
+:root {
+  --eb-btn-height: 2rem;
+  --eb-radius: 10px;
+  --eb-panel-radius: 12px;
+  --eb-shadow: 0 1px 3px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --eb-accent: #f59e0b;
+  --eb-accent-soft: rgba(245, 158, 11, 0.12);
+  --eb-risk: #ef4444;
+  --eb-safe: #22c55e;
+}
+
+.eb-workspace {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 4.25rem);
+  margin: -1.25rem -1.5rem 0;
+}
+
+.eb-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--eb-panel-radius);
+  box-shadow: var(--eb-shadow);
+  padding: 0.75rem 1rem;
+}
+
+.eb-error {
+  margin: 0 0.65rem;
+  color: var(--danger);
+  font-size: 0.8125rem;
+}
+
+.eb-empty {
+  margin: 0.65rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+/* Ribbon */
+.eb-ribbon {
+  flex-shrink: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--eb-shadow);
+}
+
+.eb-ribbon-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.eb-ribbon-project {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.eb-select {
+  min-height: var(--eb-btn-height);
+  padding: 0 0.65rem;
+  border-radius: var(--eb-radius);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 0.8125rem;
+}
+
+.eb-ribbon-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex: 1;
+}
+
+.eb-ribbon-title {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.eb-ribbon-progress {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  color: var(--eb-accent);
+}
+
+.eb-ribbon-badge {
+  margin-left: auto;
+  font-size: 0.65rem;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--eb-radius);
+  background: var(--eb-accent-soft);
+  color: var(--eb-accent);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* Body layout */
+.eb-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 0.65rem;
+  padding: 0 0.65rem 0.65rem;
+}
+
+.eb-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+}
+
+/* Progress */
+.eb-progress-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+  font-size: 0.8125rem;
+}
+
+.eb-progress-percent {
+  font-family: var(--mono);
+  color: var(--eb-accent);
+}
+
+.eb-progress-track {
+  height: 4px;
+  background: var(--surface2);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.eb-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--eb-accent), #fbbf24);
+  border-radius: 999px;
+}
+
+.eb-progress-steps {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  padding: 0;
+  margin: 0;
+}
+
+.eb-progress-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.6875rem;
+  color: var(--muted);
+}
+
+.eb-step-num {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface2);
+  font-family: var(--mono);
+  font-weight: 700;
+}
+
+.eb-progress-step.status-completed .eb-step-num {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--eb-safe);
+}
+
+.eb-progress-step.status-in_progress .eb-step-num {
+  background: var(--eb-accent-soft);
+  color: var(--eb-accent);
+}
+
+/* Workshop nav — stepper */
+.eb-workshop-nav {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.35rem;
+}
+
+.eb-workshop-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.5rem 0.35rem;
+  border-radius: var(--eb-radius);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 0.6875rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.eb-workshop-nav-item:hover:not(.active) {
+  border-color: var(--eb-accent);
+}
+
+.eb-workshop-nav-item.active {
+  border-color: var(--eb-accent);
+  background: var(--eb-accent-soft);
+  font-weight: 600;
+}
+
+.eb-workshop-nav-item.status-locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.eb-workshop-nav-item:disabled {
+  pointer-events: none;
+}
+
+.eb-workshop-nav-num {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 900px) {
+  .eb-workshop-nav {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Workshop panel */
+.eb-workshop-panel {
+  flex: 1;
+  min-height: 280px;
+}
+
+.eb-workshop-panel-header h2 {
+  margin: 0.35rem 0 0.25rem;
+  font-size: 1.125rem;
+}
+
+.eb-workshop-panel-header p {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.eb-workshop-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--eb-accent);
+  background: var(--eb-accent-soft);
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+}
+
+.eb-workshop-placeholder {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border-radius: var(--eb-radius);
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px dashed rgba(245, 158, 11, 0.25);
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.eb-record-types h3,
+.eb-records-list h3 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0.75rem 0 0.35rem;
+}
+
+.eb-record-types ul,
+.eb-records-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.eb-record-types li,
+.eb-records-list li {
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.eb-record-types code {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--eb-accent);
+}
+
+.eb-record-type {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+/* Extension panel */
+.eb-extension-panel {
+  width: min(280px, 26vw);
+  flex-shrink: 0;
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+.eb-extension-panel h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.875rem;
+}
+
+.eb-extension-intro {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+  line-height: 1.4;
+}
+
+.eb-extension-panel h4 {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0.65rem 0 0.35rem;
+}
+
+.eb-extension-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.eb-extension-list li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.75rem;
+}
+
+.eb-extension-list li strong {
+  display: block;
+  font-size: 0.8125rem;
+}
+
+.eb-ext-status {
+  font-family: var(--mono);
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  margin-left: 0.35rem;
+  color: var(--muted);
+}
+
+.eb-extension-list li.status-available .eb-ext-status {
+  color: var(--eb-safe);
+}
+
+.eb-extension-list p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.eb-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.6875rem;
+  font-family: var(--mono);
+  color: var(--muted);
+  padding: 0.25rem 0.15rem;
+}
+
+/* Workshop 1 — cards & forms */
+.eb-workshop1-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 960px) {
+  .eb-workshop1-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.eb-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--eb-panel-radius);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
+}
+
+.eb-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.eb-card-header h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.eb-card-header p {
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.eb-card-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1rem 0.5rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--eb-radius);
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.eb-card-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex: 1;
+}
+
+.eb-card-list li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.eb-card-list li:last-child {
+  border-bottom: none;
+}
+
+.eb-card-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.eb-card-item-main strong {
+  font-size: 0.875rem;
+}
+
+.eb-card-item-main p {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.eb-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  margin-top: 0.35rem;
+  font-size: 0.6875rem;
+  color: var(--muted);
+}
+
+.eb-card-meta span {
+  background: var(--surface);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.eb-card-link {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  word-break: break-all;
+}
+
+.eb-card-item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.eb-btn {
+  min-height: var(--eb-btn-height);
+  padding: 0 0.65rem;
+  border-radius: var(--eb-radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.eb-btn:hover:not(:disabled) {
+  border-color: var(--eb-accent);
+}
+
+.eb-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.eb-btn-primary {
+  background: var(--eb-accent-soft);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: var(--eb-accent);
+  font-weight: 600;
+}
+
+.eb-btn-ghost {
+  background: transparent;
+}
+
+.eb-btn-danger {
+  color: var(--eb-risk);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.eb-btn-icon {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.15rem 0.35rem;
+}
+
+/* Modal */
+.eb-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.eb-modal {
+  width: min(520px, 100%);
+  max-height: min(90vh, 720px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--eb-panel-radius);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+}
+
+.eb-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.eb-modal-header h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.eb-modal-body {
+  padding: 0.75rem 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.eb-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.eb-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8125rem;
+}
+
+.eb-form-field > span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.eb-required {
+  color: var(--eb-risk);
+}
+
+.eb-input,
+.eb-textarea {
+  width: 100%;
+  min-height: var(--eb-btn-height);
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--eb-radius);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 0.8125rem;
+  font-family: inherit;
+}
+
+.eb-textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
+.eb-input-full {
+  width: 100%;
+}
+
+/* Workshop 2 — sources de risque */
+.eb-workshop2-content {
+  margin-top: 0.65rem;
+}
+
+.eb-card-wide {
+  grid-column: 1 / -1;
+}
+
+.eb-urbanism-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--eb-radius);
+  background: rgba(6, 182, 212, 0.06);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  font-size: 0.8125rem;
+}
+
+.eb-urbanism-banner strong {
+  display: block;
+  font-size: 0.875rem;
+}
+
+.eb-urbanism-banner p {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.eb-urbanism-msg {
+  color: var(--eb-safe) !important;
+}
+
+.eb-risk-source-list li {
+  align-items: stretch;
+}
+
+.eb-risk-source-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.eb-severity-badge {
+  font-size: 0.625rem;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.eb-severity-badge.severity-low {
+  color: var(--eb-safe);
+  border-color: rgba(34, 197, 94, 0.3);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.eb-severity-badge.severity-moderate {
+  color: var(--eb-accent);
+  border-color: rgba(245, 158, 11, 0.3);
+  background: var(--eb-accent-soft);
+}
+
+.eb-severity-badge.severity-high {
+  color: #f97316;
+  border-color: rgba(249, 115, 22, 0.3);
+  background: rgba(249, 115, 22, 0.1);
+}
+
+.eb-severity-badge.severity-critical {
+  color: var(--eb-risk);
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.eb-incomplete-badge {
+  font-size: 0.625rem;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.eb-field-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.eb-risk-comment {
+  margin-top: 0.35rem !important;
+  font-style: italic;
+}
+
+.eb-multi-select {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: var(--eb-radius);
+  background: var(--surface2);
+}
+
+.eb-multi-select-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.eb-multi-select-item small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+
+.eb-form-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* Workshop 3 — scénarios stratégiques */
+.eb-workshop3-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.75rem 0 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--eb-radius);
+  background: rgba(139, 92, 246, 0.06);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.eb-workshop3-intro {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.45;
+  flex: 1;
+}
+
+.eb-scenario-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.eb-scenario-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border-radius: var(--eb-panel-radius);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.eb-scenario-card-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.eb-likelihood-badge {
+  font-size: 0.625rem;
+  font-family: var(--mono);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.eb-status-badge {
+  font-size: 0.625rem;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.eb-status-badge.status-auto {
+  color: #a78bfa;
+  border-color: rgba(167, 139, 250, 0.35);
+  background: rgba(167, 139, 250, 0.1);
+}
+
+.eb-status-badge.status-proposed {
+  color: var(--eb-accent);
+  border-color: rgba(245, 158, 11, 0.35);
+  background: var(--eb-accent-soft);
+}
+
+.eb-status-badge.status-modified {
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.35);
+  background: rgba(96, 165, 250, 0.1);
+}
+
+.eb-status-badge.status-validated {
+  color: var(--eb-safe);
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.eb-scenario-uid {
+  font-family: var(--mono);
+  font-size: 0.625rem;
+}
+
+.eb-scenario-actions {
+  margin-top: 0.65rem;
+}
+
+.eb-workshop4-toolbar {
+  background: rgba(249, 115, 22, 0.06);
+  border-color: rgba(249, 115, 22, 0.2);
+}
+
+.eb-attack-path {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+/* Workshop 5 — traitement des risques */
+.eb-workshop5-toolbar {
+  background: rgba(34, 197, 94, 0.06);
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+.eb-treatment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.eb-treatment-card {
+  border: 1px solid var(--border);
+  border-radius: var(--eb-panel-radius);
+  background: var(--surface2);
+  padding: 0.85rem;
+}
+
+.eb-treatment-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.65rem;
+}
+
+.eb-treatment-card-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.eb-treatment-subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.eb-treatment-context {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.eb-treatment-section {
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+}
+
+.eb-treatment-section h4 {
+  margin: 0 0 0.45rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.eb-decision-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.eb-measure-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.eb-framework-refs {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.625rem !important;
+  color: var(--muted) !important;
+}
+
+.eb-ptr-table-wrap {
+  overflow-x: auto;
+}
+
+.eb-ptr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.eb-ptr-table th,
+.eb-ptr-table td {
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.45rem;
+  text-align: left;
+}
+
+.eb-ptr-input {
+  min-height: 1.75rem;
+  font-size: 0.75rem;
+}
+
+.eb-risk-calc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.eb-treatment-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+}
+
+.eb-treatment-actions {
+  flex-direction: row !important;
+}
+
+@media (max-width: 960px) {
+  .eb-treatment-context,
+  .eb-risk-calc-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 1100px) {
+  .eb-body {
+    flex-direction: column;
+  }
+
+  .eb-extension-panel {
+    width: 100%;
+    max-height: 240px;
+  }
+}
