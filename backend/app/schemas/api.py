@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -20,6 +20,16 @@ class ProjectCreate(BaseModel):
     referentials: list[str] = Field(default_factory=list)
     objectives: list[str] = Field(default_factory=list)
     urbanism: dict[str, Any] = Field(default_factory=dict)
+    code: str | None = None
+    client: str | None = None
+    organization_id: UUID | None = None
+    status: str | None = None
+    priority: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    owner_id: UUID | None = None
+    tags: list[str] = Field(default_factory=list)
+    created_by: UUID | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -30,19 +40,63 @@ class ProjectUpdate(BaseModel):
     objectives: list[str] | None = None
     urbanism: dict[str, Any] | None = None
     status: str | None = None
+    code: str | None = None
+    client: str | None = None
+    organization_id: UUID | None = None
+    priority: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    owner_id: UUID | None = None
+    tags: list[str] | None = None
 
 
 class ProjectResponse(BaseModel):
     id: UUID
     name: str
+    code: str | None = None
     description: str | None
+    client: str | None = None
     organization: dict[str, Any]
+    organization_id: UUID | None = None
     referentials: list[str]
     urbanism: dict[str, Any]
     objectives: list[str]
     status: str
+    priority: str = "medium"
+    start_date: date | None = None
+    end_date: date | None = None
+    owner_id: UUID | None = None
+    tags: list[str] = Field(default_factory=list)
+    created_by: UUID | None = None
     created_at: datetime
     updated_at: datetime
+    archived_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ProjectMemberCreate(BaseModel):
+    user_id: UUID
+    project_role: str
+
+
+class ProjectMemberResponse(BaseModel):
+    id: UUID
+    project_id: UUID
+    user_id: UUID
+    project_role: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ProjectActivityResponse(BaseModel):
+    id: UUID
+    project_id: UUID
+    user_id: UUID | None
+    action: str
+    details: dict[str, Any]
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 

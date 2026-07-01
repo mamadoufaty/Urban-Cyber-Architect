@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, Text, JSON, Uuid, UniqueConstraint
+from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Text, JSON, Uuid, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -17,18 +17,37 @@ class Project(Base):
     referentials: Mapped[list] = mapped_column(JSON, default=list)
     urbanism: Mapped[dict] = mapped_column(JSON, default=dict)
     objectives: Mapped[list] = mapped_column(JSON, default=list)
+    code: Mapped[str | None] = mapped_column(String(100), nullable=True, unique=True, index=True)
+    client: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="draft")
+    priority: Mapped[str] = mapped_column(String(50), default="medium")
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("organizations.id"), nullable=True, index=True
     )
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     orchestrations: Mapped[list["OrchestrationRun"]] = relationship(back_populates="project")
     decisions: Mapped[list["HumanDecision"]] = relationship(back_populates="project")
     graph_nodes: Mapped[list["GraphNode"]] = relationship(back_populates="project")
     tenant_organization: Mapped["Organization | None"] = relationship(
         "Organization", back_populates="projects"
+    )
+    members: Mapped[list["ProjectMember"]] = relationship(
+        "ProjectMember", back_populates="project", cascade="all, delete-orphan"
+    )
+    activities: Mapped[list["ProjectActivity"]] = relationship(
+        "ProjectActivity", back_populates="project", cascade="all, delete-orphan"
     )
 
 

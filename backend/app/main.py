@@ -11,6 +11,7 @@ from app.database import Base, async_session, engine
 import app.models.admin  # noqa: F401 — enregistrement des tables Administration
 import app.models.ebios  # noqa: F401 — enregistrement des tables EBIOS
 import app.models.deliverables  # noqa: F401 — enregistrement des tables livrables
+import app.models.project_core  # noqa: F401 — membres et activité projet V1.3
 from app.services.admin.seed_service import run_admin_seed
 
 logging.basicConfig(level=logging.INFO)
@@ -41,8 +42,28 @@ def _ensure_schema_columns(sync_conn) -> None:
             )
     if insp.has_table("projects"):
         cols = {c["name"] for c in insp.get_columns("projects")}
-        if "organization_id" not in cols:
-            sync_conn.execute(text("ALTER TABLE projects ADD COLUMN organization_id VARCHAR(36)"))
+        project_columns = {
+            "organization_id": "VARCHAR(36)",
+            "code": "VARCHAR(100)",
+            "client": "VARCHAR(255)",
+            "priority": "VARCHAR(50)",
+            "start_date": "DATE",
+            "end_date": "DATE",
+            "owner_id": "VARCHAR(36)",
+            "tags": "JSON",
+            "created_by": "VARCHAR(36)",
+            "archived_at": "DATETIME",
+        }
+        for col_name, col_type in project_columns.items():
+            if col_name not in cols:
+                sync_conn.execute(text(f"ALTER TABLE projects ADD COLUMN {col_name} {col_type}"))
+                cols.add(col_name)
+        if "priority" in cols:
+            sync_conn.execute(
+                text("UPDATE projects SET priority = 'medium' WHERE priority IS NULL")
+            )
+        if "tags" in cols:
+            sync_conn.execute(text("UPDATE projects SET tags = '[]' WHERE tags IS NULL"))
 
 
 @asynccontextmanager

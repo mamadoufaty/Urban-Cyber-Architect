@@ -1,4 +1,3 @@
-import copy
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,9 +7,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.entities import Project
-from app.schemas.api import ProjectCreate, ProjectResponse, ProjectUpdate
+from app.models.project_core import ProjectActivity, ProjectMember
+from app.schemas.api import (
+    ProjectActivityResponse,
+    ProjectCreate,
+    ProjectMemberCreate,
+    ProjectMemberResponse,
+    ProjectResponse,
+    ProjectUpdate,
+)
 from app.services.project_dependencies import collect_project_dependencies, delete_empty_ebios_assessments
 from app.services.project_templates import apply_template, list_templates
+from app.services.projects.project_service import (
+    add_project_member,
+    apply_project_updates,
+    archive_project_entity,
+    create_project_entity,
+    duplicate_project_entity,
+    log_project_delete,
+    log_project_update,
+    remove_project_member,
+)
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -28,13 +45,25 @@ async def create_project(data: ProjectCreate, db: AsyncSession = Depends(get_db)
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         org = data.organization.model_dump() if data.organization else payload["organization"]
-        project = Project(
+        project = await create_project_entity(
+            db,
             name=payload["name"],
             description=data.description or payload.get("description"),
             organization=org,
             referentials=payload.get("referentials", []),
             objectives=payload.get("objectives", []),
             urbanism=payload.get("urbanism", {}),
+            code=data.code,
+            client=data.client,
+            organization_id=data.organization_id,
+            status=data.status or "draft",
+            priority=data.priority or "medium",
+            start_date=data.start_date,
+            end_date=data.end_date,
+            owner_id=data.owner_id,
+            tags=data.tags,
+            created_by=data.created_by,
+            user_id=data.created_by,
         )
     else:
         from app.services.urbanism_schema import _empty_club_urba
@@ -46,16 +75,27 @@ async def create_project(data: ProjectCreate, db: AsyncSession = Depends(get_db)
         if "club_urba" not in urbanism:
             urbanism = {**urbanism, "club_urba": _empty_club_urba()}
 
-        project = Project(
+        project = await create_project_entity(
+            db,
             name=data.name,
             description=data.description,
             organization=org,
             referentials=data.referentials,
             objectives=data.objectives,
             urbanism=urbanism,
+            code=data.code,
+            client=data.client,
+            organization_id=data.organization_id,
+            status=data.status or "draft",
+            priority=data.priority or "medium",
+            start_date=data.start_date,
+            end_date=data.end_date,
+            owner_id=data.owner_id,
+            tags=data.tags,
+            created_by=data.created_by,
+            user_id=data.created_by,
         )
 
-    db.add(project)
     await db.commit()
     await db.refresh(project)
     return project
@@ -81,12 +121,11 @@ async def update_project(project_id: UUID, data: ProjectUpdate, db: AsyncSession
     if not project:
         raise HTTPException(404, "Project not found")
 
-    for field, value in data.model_dump(exclude_unset=True).items():
-        if field == "organization" and value is not None:
-            setattr(project, field, value)
-        elif value is not None:
-            setattr(project, field, value)
-
+    updates = data.model_dump(exclude_unset=True)
+    if "organization" in updates and updates["organization"] is not None:
+        updates["organization"] = updates["organization"]
+    changed = apply_project_updates(project, updates)
+    await log_project_update(db, project, changed)
     await db.commit()
     await db.refresh(project)
     return project
@@ -108,9 +147,21 @@ async def delete_project(project_id: UUID, db: AsyncSession = Depends(get_db)):
             },
         )
 
+    await log_project_delete(db, project)
     await delete_empty_ebios_assessments(db, project_id)
     await db.delete(project)
     await db.commit()
+
+
+@router.post("/{project_id}/archive", response_model=ProjectResponse)
+async def archive_project(project_id: UUID, db: AsyncSession = Depends(get_db)):
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    project = await archive_project_entity(db, project)
+    await db.commit()
+    await db.refresh(project)
+    return project
 
 
 @router.post("/{project_id}/duplicate", response_model=ProjectResponse, status_code=201)
@@ -119,19 +170,77 @@ async def duplicate_project(project_id: UUID, db: AsyncSession = Depends(get_db)
     if not project:
         raise HTTPException(404, "Project not found")
 
-    clone = Project(
-        name=f"{project.name} (copie)",
-        description=project.description,
-        organization=copy.deepcopy(project.organization),
-        referentials=copy.deepcopy(project.referentials),
-        objectives=copy.deepcopy(project.objectives),
-        urbanism=copy.deepcopy(project.urbanism),
-        status="draft",
-    )
-    db.add(clone)
+    clone = await duplicate_project_entity(db, project)
     await db.commit()
     await db.refresh(clone)
     return clone
+
+
+@router.get("/{project_id}/members", response_model=list[ProjectMemberResponse])
+async def list_project_members(project_id: UUID, db: AsyncSession = Depends(get_db)):
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    result = await db.execute(
+        select(ProjectMember)
+        .where(ProjectMember.project_id == project_id)
+        .order_by(ProjectMember.created_at.asc())
+    )
+    return result.scalars().all()
+
+
+@router.post("/{project_id}/members", response_model=ProjectMemberResponse, status_code=201)
+async def create_project_member(
+    project_id: UUID,
+    data: ProjectMemberCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    try:
+        member = await add_project_member(
+            db,
+            project,
+            user_id=data.user_id,
+            project_role=data.project_role,
+        )
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    await db.commit()
+    await db.refresh(member)
+    return member
+
+
+@router.delete("/{project_id}/members/{member_id}", status_code=204)
+async def delete_project_member(
+    project_id: UUID,
+    member_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    member = await db.get(ProjectMember, member_id)
+    if not member or member.project_id != project_id:
+        raise HTTPException(404, "Member not found")
+    await remove_project_member(db, project, member)
+    await db.commit()
+
+
+@router.get("/{project_id}/activity", response_model=list[ProjectActivityResponse])
+async def list_project_activity(project_id: UUID, db: AsyncSession = Depends(get_db)):
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    result = await db.execute(
+        select(ProjectActivity)
+        .where(ProjectActivity.project_id == project_id)
+        .order_by(ProjectActivity.created_at.desc())
+    )
+    return result.scalars().all()
 
 
 @router.get("/{project_id}/context")
