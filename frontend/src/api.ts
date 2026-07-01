@@ -25,14 +25,41 @@ export interface Organization {
 export interface Project {
   id: string;
   name: string;
+  code?: string | null;
   description: string | null;
+  client?: string | null;
   organization: Organization;
+  organization_id?: string | null;
   referentials: string[];
   objectives: string[];
   urbanism: Record<string, unknown>;
   status: string;
+  priority?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  owner_id?: string | null;
+  tags?: string[];
+  created_by?: string | null;
   created_at?: string;
   updated_at?: string;
+  archived_at?: string | null;
+}
+
+export interface ProjectMember {
+  id: string;
+  project_id: string;
+  user_id: string;
+  project_role: string;
+  created_at: string;
+}
+
+export interface ProjectActivity {
+  id: string;
+  project_id: string;
+  user_id: string | null;
+  action: string;
+  details: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface ProjectTemplate {
@@ -52,7 +79,19 @@ export interface ProjectCreatePayload {
   referentials?: string[];
   objectives?: string[];
   urbanism?: Record<string, unknown>;
+  code?: string;
+  client?: string;
+  organization_id?: string;
+  status?: string;
+  priority?: string;
+  start_date?: string;
+  end_date?: string;
+  owner_id?: string;
+  tags?: string[];
+  created_by?: string;
 }
+
+export type ProjectUpdatePayload = Partial<ProjectCreatePayload>;
 
 export function listProjects() {
   return fetchJSON<Project[]>("/projects");
@@ -91,7 +130,7 @@ export async function createProject(data: ProjectCreatePayload): Promise<Project
   return project;
 }
 
-export function updateProject(id: string, data: Partial<ProjectCreatePayload> & { status?: string }) {
+export function updateProject(id: string, data: ProjectUpdatePayload & { status?: string }) {
   return fetchJSON<Project>(`/projects/${id}`, { method: "PUT", body: JSON.stringify(data) });
 }
 
@@ -125,6 +164,32 @@ export async function deleteProject(id: string) {
 
 export function duplicateProject(id: string) {
   return fetchJSON<Project>(`/projects/${id}/duplicate`, { method: "POST" });
+}
+
+export function archiveProject(id: string) {
+  return fetchJSON<Project>(`/projects/${id}/archive`, { method: "POST" });
+}
+
+export function listProjectMembers(projectId: string) {
+  return fetchJSON<ProjectMember[]>(`/projects/${projectId}/members`);
+}
+
+export function addProjectMember(
+  projectId: string,
+  payload: { user_id: string; project_role: string },
+) {
+  return fetchJSON<ProjectMember>(`/projects/${projectId}/members`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function removeProjectMember(projectId: string, memberId: string) {
+  return fetchJSON<void>(`/projects/${projectId}/members/${memberId}`, { method: "DELETE" });
+}
+
+export function listProjectActivity(projectId: string) {
+  return fetchJSON<ProjectActivity[]>(`/projects/${projectId}/activity`);
 }
 
 export function orchestrate(projectId: string, template = "architecture_analysis") {

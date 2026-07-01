@@ -1,40 +1,47 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Project,
   ProjectDeleteConflictError,
   ProjectTemplate,
+  archiveProject,
   createProject,
   deleteProject,
   duplicateProject,
+  listAdminOrganizations,
+  listAdminUsers,
   listProjectTemplates,
   listProjects,
   updateProject,
+  type AdminOrganization,
+  type AdminUser,
 } from "../api";
+import ProjectFormModal, {
+  buildProjectPayload,
+  type ProjectFormValues,
+} from "../components/projects/ProjectFormModal";
+import { useActiveProject } from "../context/ActiveProjectContext";
+import {
+  projectPriorityLabel,
+  projectStatusLabel,
+} from "../projects/constants";
+import { formatDateOnly, formatDateTime } from "../projects/format";
+import "../styles/projects.css";
 
 type ModalMode = "create" | "edit" | null;
-type CreateMode = "blank" | "example";
 
-const CREATE_TIMEOUT_MS = 10_000;
-
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new Error(message)), ms);
-    promise
-      .then((value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      })
-      .catch((err) => {
-        window.clearTimeout(timer);
-        reject(err);
-      });
-  });
+function userDisplayName(user: AdminUser | undefined): string {
+  if (!user) return "—";
+  const name = [user.first_name, user.last_name].filter(Boolean).join(" ");
+  return name || user.username;
 }
 
 export default function Projects() {
   const navigate = useNavigate();
+  const { activeProject, setActiveProject, clearActiveProject } = useActiveProject();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [organizations, setOrganizations] = useState<AdminOrganization[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -44,14 +51,11 @@ export default function Projects() {
   );
   const [modal, setModal] = useState<ModalMode>(null);
   const [editing, setEditing] = useState<Project | null>(null);
-  const [createMode, setCreateMode] = useState<CreateMode>("blank");
-  const [formName, setFormName] = useState("");
-  const [formExampleTemplate, setFormExampleTemplate] = useState("metropolis");
-  const [formDescription, setFormDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const exampleTemplates = templates.filter((t) => t.is_example);
+  const orgMap = useMemo(() => new Map(organizations.map((o) => [o.id, o])), [organizations]);
+  const userMap = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
 
   const refreshProjects = useCallback(async () => {
     const projs = await listProjects();
@@ -63,13 +67,18 @@ export default function Projects() {
     setLoading(true);
     setLoadError(null);
     try {
-      const projs = await listProjects();
+      const [projs, orgsRes, usersRes] = await Promise.all([
+        listProjects(),
+        listAdminOrganizations().catch(() => ({ items: [] as AdminOrganization[] })),
+        listAdminUsers().catch(() => ({ items: [] as AdminUser[] })),
+      ]);
       setProjects(projs);
+      setOrganizations(orgsRes.items);
+      setUsers(usersRes.items);
       try {
-        const tpls = await listProjectTemplates();
-        setTemplates(tpls);
-      } catch (tplErr) {
-        console.warn("[Projects] Impossible de charger les modèles exemples", tplErr);
+        setTemplates(await listProjectTemplates());
+      } catch {
+        setTemplates([]);
       }
     } catch (e) {
       setProjects([]);
@@ -85,18 +94,12 @@ export default function Projects() {
 
   function openCreate() {
     setEditing(null);
-    setCreateMode("blank");
-    setFormName("");
-    setFormExampleTemplate("metropolis");
-    setFormDescription("");
     setFormError(null);
     setModal("create");
   }
 
   function openEdit(project: Project) {
     setEditing(project);
-    setFormName(project.name);
-    setFormDescription(project.description ?? "");
     setFormError(null);
     setModal("edit");
   }
@@ -107,86 +110,39 @@ export default function Projects() {
     setFormError(null);
   }
 
-  function onExampleTemplateChange(templateId: string) {
-    setFormExampleTemplate(templateId);
-    const tpl = exampleTemplates.find((t) => t.id === templateId);
-    if (tpl?.default_name) {
-      setFormName(tpl.default_name);
+  function organizationLabel(project: Project): string {
+    if (project.organization_id) {
+      return orgMap.get(project.organization_id)?.name ?? project.organization?.name ?? "—";
     }
+    return project.organization?.name ?? "—";
   }
 
-  async function handleCreateProject() {
-    const payload = {
-      name: formName.trim(),
-      template: createMode === "example" ? formExampleTemplate : "blank",
-      description: formDescription || undefined,
-    };
-
-    setSaving(true);
-    setFormError(null);
-    setError(null);
-
-    try {
-      console.log("[Projects] handleCreateProject — avant appel API", payload);
-
-      const createdProject = await withTimeout(
-        createProject(payload),
-        CREATE_TIMEOUT_MS,
-        "La requête a expiré après 10 secondes. Vérifiez que le backend est accessible.",
-      );
-
-      console.log("[Projects] handleCreateProject — après réponse API", createdProject);
-      console.log("[Projects] handleCreateProject — contenu de la réponse", JSON.stringify(createdProject));
-
-      const projectId = createdProject?.id;
-      console.log("[Projects] handleCreateProject — projectId récupéré", projectId);
-
-      if (!projectId) {
-        throw new Error("Projet créé mais ID absent dans la réponse API");
-      }
-
-      console.log("[Projects] handleCreateProject — avant fermeture modale");
-      closeModal();
-
-      console.log("[Projects] handleCreateProject — avant navigate", `/schema-urbanisme?project=${projectId}`);
-      navigate(`/schema-urbanisme?project=${projectId}`);
-
-      refreshProjects().catch((refreshErr) => {
-        console.warn("[Projects] refreshProjects en arrière-plan échoué", refreshErr);
-      });
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Erreur lors de la création du projet";
-      setFormError(message);
-      setError(message);
-    } finally {
-      setSaving(false);
-    }
+  function handleOpen(project: Project) {
+    setActiveProject({ id: project.id, name: project.name, code: project.code });
+    navigate(`/projects/${project.id}`);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!formName.trim()) {
+  async function handleFormSubmit(values: ProjectFormValues) {
+    if (!values.name.trim()) {
       setFormError("Le nom du projet est obligatoire");
       return;
     }
 
-    if (modal === "create") {
-      await handleCreateProject();
-      return;
-    }
-
-    if (!editing) return;
-
     setSaving(true);
     setFormError(null);
     setError(null);
+
     try {
-      await updateProject(editing.id, {
-        name: formName.trim(),
-        description: formDescription || undefined,
-      });
-      closeModal();
-      await refreshProjects();
+      if (modal === "create") {
+        const created = await createProject(buildProjectPayload(values, "create"));
+        closeModal();
+        await refreshProjects();
+        handleOpen(created);
+      } else if (editing) {
+        await updateProject(editing.id, buildProjectPayload(values, "edit"));
+        closeModal();
+        await refreshProjects();
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : "Erreur lors de l'enregistrement";
       setFormError(message);
@@ -196,18 +152,30 @@ export default function Projects() {
     }
   }
 
+  async function handleArchive(project: Project) {
+    if (!confirm(`Archiver le projet « ${project.name} » ?`)) return;
+    setError(null);
+    try {
+      await archiveProject(project.id);
+      await refreshProjects();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur archivage");
+    }
+  }
+
   async function handleDelete(project: Project) {
     if (!confirm(`Supprimer le projet « ${project.name} » ?`)) return;
     setDeleteConflict(null);
     try {
       await deleteProject(project.id);
+      if (activeProject?.id === project.id) {
+        clearActiveProject();
+      }
       await refreshProjects();
     } catch (e) {
       if (e instanceof ProjectDeleteConflictError) {
         setDeleteConflict(e.dependencies);
-        setError(
-          "Impossible de supprimer ce projet : il contient encore des données liées.",
-        );
+        setError("Impossible de supprimer ce projet : il contient encore des données liées.");
         return;
       }
       setError(e instanceof Error ? e.message : "Erreur suppression");
@@ -215,25 +183,14 @@ export default function Projects() {
   }
 
   async function handleDuplicate(project: Project) {
+    setError(null);
     try {
       const clone = await duplicateProject(project.id);
-      refreshProjects().catch(() => undefined);
-      navigate(`/schema-urbanisme?project=${clone.id}`);
+      await refreshProjects();
+      handleOpen(clone);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur duplication");
     }
-  }
-
-  function objectCount(project: Project): number {
-    const club = (project.urbanism?.club_urba ?? {}) as Record<string, Record<string, string[]>>;
-    let n = 0;
-    for (const couche of Object.values(club)) {
-      if (typeof couche !== "object") continue;
-      for (const items of Object.values(couche)) {
-        if (Array.isArray(items)) n += items.length;
-      }
-    }
-    return n;
   }
 
   return (
@@ -241,7 +198,7 @@ export default function Projects() {
       <div className="page-header projects-header">
         <div>
           <h2>Projets</h2>
-          <p>Créez un projet vierge et construisez votre cartographie Club Urba</p>
+          <p>Cockpit de gestion — créez, pilotez et ouvrez vos projets d'architecture</p>
         </div>
         <button type="button" className="btn btn-primary" onClick={openCreate}>
           + Nouveau projet
@@ -286,50 +243,95 @@ export default function Projects() {
         <div className="card projects-empty">
           <h3>Aucun projet</h3>
           <p style={{ color: "var(--muted)", margin: "0.75rem 0 1.25rem" }}>
-            Créez un <strong>projet vierge</strong> et renseignez vos objectifs, processus, îlots et composants
-            techniques. Les modèles Smart City, Banque, Santé et Industrie restent disponibles comme exemples optionnels.
+            Créez votre premier projet pour centraliser l'urbanisme, la GRC, le SOC et les livrables.
           </p>
           <button type="button" className="btn btn-primary" onClick={openCreate}>
-            Créer un projet vierge
+            Créer un projet
           </button>
         </div>
       ) : (
-        <div className="projects-table-wrapper card">
+        <div className="projects-table-wrapper card projects-cockpit-table">
           <table className="projects-table">
             <thead>
               <tr>
                 <th>Nom</th>
-                <th>Secteur</th>
-                <th>Objets Club Urba</th>
+                <th>Code</th>
+                <th>Client</th>
+                <th>Organisation</th>
+                <th>Responsable</th>
                 <th>Statut</th>
+                <th>Priorité</th>
+                <th>Début</th>
+                <th>Fin</th>
+                <th>Dernière modif.</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {projects.map((p) => (
-                <tr key={p.id}>
+                <tr
+                  key={p.id}
+                  className={activeProject?.id === p.id ? "project-row-active" : undefined}
+                >
                   <td>
                     <strong>{p.name}</strong>
                     {p.description && <span className="project-desc">{p.description}</span>}
                   </td>
-                  <td>{p.organization?.sector ?? "—"}</td>
                   <td>
-                    <span className={objectCount(p) > 0 ? "status-badge" : "project-warn-badge"}>
-                      {objectCount(p)} objets
+                    <code className="project-code-cell">{p.code ?? "—"}</code>
+                  </td>
+                  <td>{p.client ?? "—"}</td>
+                  <td>{organizationLabel(p)}</td>
+                  <td>{userDisplayName(p.owner_id ? userMap.get(p.owner_id) : undefined)}</td>
+                  <td>
+                    <span className={`status-badge status-${p.status}`}>
+                      {projectStatusLabel(p.status)}
                     </span>
                   </td>
-                  <td>{p.status}</td>
+                  <td>
+                    <span className={`priority-badge priority-${p.priority ?? "medium"}`}>
+                      {projectPriorityLabel(p.priority ?? "medium")}
+                    </span>
+                  </td>
+                  <td>{formatDateOnly(p.start_date)}</td>
+                  <td>{formatDateOnly(p.end_date)}</td>
+                  <td>{formatDateTime(p.updated_at)}</td>
                   <td className="projects-actions">
-                    <Link to={`/schema-urbanisme?project=${p.id}`} className="btn btn-secondary btn-sm">
-                      Cartographie
-                    </Link>
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => openEdit(p)}>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => handleOpen(p)}
+                    >
+                      Ouvrir
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => openEdit(p)}
+                    >
                       Modifier
                     </button>
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleDuplicate(p)}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => handleDuplicate(p)}
+                    >
                       Dupliquer
                     </button>
-                    <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDelete(p)}>
+                    {p.status !== "archived" && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => handleArchive(p)}
+                      >
+                        Archiver
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={() => handleDelete(p)}
+                    >
                       Supprimer
                     </button>
                   </td>
@@ -340,101 +342,18 @@ export default function Projects() {
         </div>
       )}
 
-      {modal && (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className="modal-card modal-card-wide" onClick={(e) => e.stopPropagation()}>
-            <h3>{modal === "create" ? "Nouveau projet" : "Modifier le projet"}</h3>
-            {formError && (
-              <div className="project-error modal-form-error" role="alert">
-                {formError}
-              </div>
-            )}
-            <form onSubmit={handleSubmit}>
-              {modal === "create" && (
-                <>
-                  <div className="form-group">
-                    <label>Type de création</label>
-                    <div className="create-mode-toggle">
-                      <button
-                        type="button"
-                        className={`create-mode-btn ${createMode === "blank" ? "selected" : ""}`}
-                        onClick={() => {
-                          setCreateMode("blank");
-                          setFormName("");
-                        }}
-                      >
-                        <strong>Projet vierge</strong>
-                        <span>Cartographie vide — vous saisissez chaque zone</span>
-                      </button>
-                      <button
-                        type="button"
-                        className={`create-mode-btn ${createMode === "example" ? "selected" : ""}`}
-                        onClick={() => {
-                          setCreateMode("example");
-                          onExampleTemplateChange(formExampleTemplate);
-                        }}
-                      >
-                        <strong>Créer depuis un modèle exemple</strong>
-                        <span>Préremplit une cartographie de démonstration</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {createMode === "example" && (
-                    <div className="form-group">
-                      <label>Modèle exemple (optionnel)</label>
-                      <div className="template-grid">
-                        {exampleTemplates.map((t) => (
-                          <button
-                            key={t.id}
-                            type="button"
-                            className={`template-card ${formExampleTemplate === t.id ? "selected" : ""}`}
-                            onClick={() => onExampleTemplateChange(t.id)}
-                          >
-                            <strong>{t.label}</strong>
-                            <span>{t.description}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-
-              <div className="form-group">
-                <label htmlFor="project-name">Nom du projet</label>
-                <input
-                  id="project-name"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  placeholder={createMode === "blank" ? "Mon projet" : "Nom du projet"}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="project-desc">Description</label>
-                <textarea
-                  id="project-desc"
-                  value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
-                  rows={2}
-                  placeholder="Description optionnelle"
-                />
-              </div>
-
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={closeModal} disabled={saving}>
-                  Annuler
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? "Enregistrement…" : modal === "create" ? "Créer et ouvrir la cartographie" : "Enregistrer"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ProjectFormModal
+        mode={modal === "edit" ? "edit" : "create"}
+        open={modal !== null}
+        saving={saving}
+        error={formError}
+        initial={editing}
+        organizations={organizations}
+        users={users}
+        templates={templates}
+        onClose={closeModal}
+        onSubmit={handleFormSubmit}
+      />
     </>
   );
 }

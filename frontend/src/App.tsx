@@ -34,6 +34,8 @@ import Dashboard from "./pages/Dashboard";
 
 import Projects from "./pages/Projects";
 
+import ProjectDetail from "./pages/ProjectDetail";
+
 import AIGovernance from "./pages/AIGovernance";
 
 import PromptStudio from "./pages/PromptStudio";
@@ -66,6 +68,8 @@ import SocCorrelations from "./pages/soc/Correlations";
 import WazuhConnectorSettings from "./pages/settings/WazuhConnectorSettings";
 
 import ModulePlaceholder from "./pages/ModulePlaceholder";
+
+import ActiveProjectBar from "./components/projects/ActiveProjectBar";
 
 import type { ReactNode } from "react";
 
@@ -233,6 +237,8 @@ function AppShell() {
 
           </button>
 
+          <ActiveProjectBar />
+
           <UserSessionBar variant="header" />
 
         </header>
@@ -264,6 +270,22 @@ function AppShell() {
               <Guarded module="projects">
 
                 <Projects />
+
+              </Guarded>
+
+            }
+
+          />
+
+          <Route
+
+            path="/projects/:projectId"
+
+            element={
+
+              <Guarded module="projects">
+
+                <ProjectDetail />
 
               </Guarded>
 
