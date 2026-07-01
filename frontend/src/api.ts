@@ -975,6 +975,8 @@ export interface AdminOrganization {
   code: string;
   description: string | null;
   status: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface AdminOrganizationsListResponse {
@@ -1049,4 +1051,54 @@ export function listAdminRoles() {
 
 export function listAdminOrganizations() {
   return fetchJSON<AdminOrganizationsListResponse>("/admin/organizations");
+}
+
+export type AdminOrganizationCreatePayload = {
+  name: string;
+  code: string;
+  description?: string;
+  status?: string;
+};
+
+export type AdminOrganizationUpdatePayload = {
+  name?: string;
+  description?: string;
+  status?: string;
+};
+
+export function getAdminOrganization(organizationId: string) {
+  return fetchJSON<AdminOrganization>(`/admin/organizations/${organizationId}`);
+}
+
+export function createAdminOrganization(payload: AdminOrganizationCreatePayload) {
+  return fetchJSON<AdminOrganization>("/admin/organizations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminOrganization(
+  organizationId: string,
+  payload: AdminOrganizationUpdatePayload
+) {
+  return fetchJSON<AdminOrganization>(`/admin/organizations/${organizationId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminOrganization(organizationId: string) {
+  return fetchJSON<void>(`/admin/organizations/${organizationId}`, { method: "DELETE" });
+}
+
+export function activateAdminOrganization(organizationId: string) {
+  return fetchJSON<AdminOrganization>(`/admin/organizations/${organizationId}/activate`, {
+    method: "PATCH",
+  });
+}
+
+export function deactivateAdminOrganization(organizationId: string) {
+  return fetchJSON<AdminOrganization>(`/admin/organizations/${organizationId}/deactivate`, {
+    method: "PATCH",
+  });
 }

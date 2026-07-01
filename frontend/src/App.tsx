@@ -57,6 +57,8 @@ import Livrables from "./pages/Livrables";
 
 import AdminUsers from "./pages/administration/AdminUsers";
 
+import AdminOrganizations from "./pages/administration/AdminOrganizations";
+
 import WazuhDashboard from "./pages/soc/WazuhDashboard";
 
 import SocCorrelations from "./pages/soc/Correlations";
@@ -502,6 +504,22 @@ function AppShell() {
               <Guarded module="administration">
 
                 <AdminUsers />
+
+              </Guarded>
+
+            }
+
+          />
+
+          <Route
+
+            path="/administration/organizations"
+
+            element={
+
+              <Guarded module="administration">
+
+                <AdminOrganizations />
 
               </Guarded>
 

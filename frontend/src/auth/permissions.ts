@@ -66,6 +66,7 @@ const PATH_MODULE_MAP: Record<string, AppModule> = {
   "/prompt-studio": "ai",
   "/knowledge-base": "ai",
   "/administration/users": "administration",
+  "/administration/organizations": "administration",
 };
 
 export function moduleForPath(pathname: string): AppModule | null {

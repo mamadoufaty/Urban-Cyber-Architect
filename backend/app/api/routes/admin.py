@@ -178,6 +178,53 @@ async def api_update_organization(
         raise HTTPException(404, str(e)) from e
 
 
+@router.delete("/organizations/{organization_id}", status_code=204)
+async def api_delete_organization(organization_id: UUID, db: AsyncSession = Depends(get_db)):
+    try:
+        await organization_service.delete_organization(db, organization_id)
+        await audit_service.log_action(
+            db,
+            action="organization.delete",
+            object_type="organization",
+            object_id=str(organization_id),
+        )
+        await db.commit()
+    except ValueError as e:
+        raise _http_error(e) from e
+
+
+@router.patch("/organizations/{organization_id}/activate", response_model=OrganizationRead)
+async def api_activate_organization(organization_id: UUID, db: AsyncSession = Depends(get_db)):
+    try:
+        org = await organization_service.activate_organization(db, organization_id)
+        await audit_service.log_action(
+            db,
+            action="organization.activate",
+            object_type="organization",
+            object_id=str(organization_id),
+        )
+        await db.commit()
+        return OrganizationRead.model_validate(org)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+@router.patch("/organizations/{organization_id}/deactivate", response_model=OrganizationRead)
+async def api_deactivate_organization(organization_id: UUID, db: AsyncSession = Depends(get_db)):
+    try:
+        org = await organization_service.deactivate_organization(db, organization_id)
+        await audit_service.log_action(
+            db,
+            action="organization.deactivate",
+            object_type="organization",
+            object_id=str(organization_id),
+        )
+        await db.commit()
+        return OrganizationRead.model_validate(org)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+
+
 @router.get("/roles", response_model=RoleListResponse)
 async def api_list_roles(db: AsyncSession = Depends(get_db)):
     items, total = await role_service.list_roles(db)

@@ -62,5 +62,10 @@ describe("canAccessPath", () => {
   it("blocks non-admin from administration", () => {
     expect(canAccessPath("rssi", "/administration/users")).toBe(false);
     expect(canAccessPath("soc", "/administration/users")).toBe(false);
+    expect(canAccessPath("rssi", "/administration/organizations")).toBe(false);
+  });
+
+  it("allows admin on administration organizations path", () => {
+    expect(canAccessPath("admin", "/administration/organizations")).toBe(true);
   });
 });

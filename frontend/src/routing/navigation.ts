@@ -86,7 +86,8 @@ export const ADMIN_NAV: NavSection = {
   id: "administration",
   title: "Administration",
   module: "administration",
-  items: [{ path: "/administration/users", label: "Utilisateurs", module: "administration" }],
+  items: [{ path: "/administration/users", label: "Utilisateurs", module: "administration" },
+    { path: "/administration/organizations", label: "Organisations", module: "administration" }],
 };
 
 export const NAV_SECTIONS: NavSection[] = [

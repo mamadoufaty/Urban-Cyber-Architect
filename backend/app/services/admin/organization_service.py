@@ -8,7 +8,8 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.admin import Organization
+from app.models.admin import Organization, User
+from app.models.entities import Project
 from app.schemas.admin import OrganizationCreate, OrganizationUpdate
 
 
@@ -61,3 +62,31 @@ async def archive_organization(db: AsyncSession, organization_id: UUID) -> Organ
     org.updated_at = datetime.now(timezone.utc)
     await db.flush()
     return org
+
+
+async def activate_organization(db: AsyncSession, organization_id: UUID) -> Organization:
+    org = await get_organization(db, organization_id)
+    org.status = "active"
+    org.updated_at = datetime.now(timezone.utc)
+    await db.flush()
+    return org
+
+
+async def deactivate_organization(db: AsyncSession, organization_id: UUID) -> Organization:
+    return await archive_organization(db, organization_id)
+
+
+async def delete_organization(db: AsyncSession, organization_id: UUID) -> None:
+    org = await get_organization(db, organization_id)
+    user_count = await db.scalar(
+        select(func.count()).select_from(User).where(User.organization_id == organization_id)
+    )
+    if user_count and user_count > 0:
+        raise ValueError("Impossible de supprimer : des utilisateurs sont rattachés à cette organisation")
+    project_count = await db.scalar(
+        select(func.count()).select_from(Project).where(Project.organization_id == organization_id)
+    )
+    if project_count and project_count > 0:
+        raise ValueError("Impossible de supprimer : des projets sont rattachés à cette organisation")
+    await db.delete(org)
+    await db.flush()
