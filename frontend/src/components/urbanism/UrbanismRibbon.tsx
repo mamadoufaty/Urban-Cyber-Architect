@@ -18,6 +18,8 @@ type UrbanismRibbonProps = {
   alignDisabled: { h: boolean; v: boolean; dh: boolean; dv: boolean; center: boolean };
   onExportPng: () => void;
   onExportPdf: () => void;
+  onExportJson: () => void;
+  onExportCsv: () => void;
   exportDisabled: boolean;
   author: string;
   onAuthorChange: (value: string) => void;
@@ -29,6 +31,7 @@ type UrbanismRibbonProps = {
   showResetEdge?: boolean;
   showResetNodes?: boolean;
   saveStatus: string | null;
+  readOnly?: boolean;
 };
 
 function RibbonGroup({ children, label }: { children: React.ReactNode; label?: string }) {
@@ -60,6 +63,8 @@ export default function UrbanismRibbon({
   alignDisabled,
   onExportPng,
   onExportPdf,
+  onExportJson,
+  onExportCsv,
   exportDisabled,
   author,
   onAuthorChange,
@@ -71,6 +76,7 @@ export default function UrbanismRibbon({
   showResetEdge,
   showResetNodes,
   saveStatus,
+  readOnly,
 }: UrbanismRibbonProps) {
   return (
     <div className="ua-ribbon">
@@ -111,6 +117,8 @@ export default function UrbanismRibbon({
             type="button"
             className={`ua-btn ua-btn-toggle${chartMode === "edit" ? " active" : ""}`}
             onClick={() => onChartModeChange("edit")}
+            disabled={readOnly}
+            title={readOnly ? "Lecture seule — cette version ne peut pas être modifiée" : undefined}
           >
             Édition
           </button>
@@ -157,6 +165,12 @@ export default function UrbanismRibbon({
           </button>
           <button type="button" className="ua-btn ua-btn-primary" disabled={exportDisabled} onClick={onExportPdf}>
             Export PDF
+          </button>
+          <button type="button" className="ua-btn" disabled={exportDisabled} onClick={onExportJson}>
+            Export JSON
+          </button>
+          <button type="button" className="ua-btn" disabled={exportDisabled} onClick={onExportCsv}>
+            Export CSV
           </button>
           <label className="ua-ribbon-author">
             <span className="sr-only">Auteur PDF</span>

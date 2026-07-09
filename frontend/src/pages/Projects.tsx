@@ -12,15 +12,21 @@ import {
   listAdminUsers,
   listProjectTemplates,
   listProjects,
+  listReferentials,
   updateProject,
   type AdminOrganization,
   type AdminUser,
+  type Referential,
 } from "../api";
 import ProjectFormModal, {
   buildProjectPayload,
   type ProjectFormValues,
 } from "../components/projects/ProjectFormModal";
 import { useActiveProject } from "../context/ActiveProjectContext";
+import { useAuth } from "../context/AuthContext";
+import { isAdminRole } from "../auth/permissions";
+import { upsertOrganization } from "../projects/organizationSelect";
+import { upsertReferential } from "../projects/referentialSelect";
 import {
   projectPriorityLabel,
   projectStatusLabel,
@@ -39,10 +45,13 @@ function userDisplayName(user: AdminUser | undefined): string {
 export default function Projects() {
   const navigate = useNavigate();
   const { activeProject, setActiveProject, clearActiveProject } = useActiveProject();
+  const { user } = useAuth();
+  const canChangeOrganization = isAdminRole(user?.role);
   const [projects, setProjects] = useState<Project[]>([]);
   const [organizations, setOrganizations] = useState<AdminOrganization[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
+  const [referentials, setReferentials] = useState<Referential[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,14 +76,16 @@ export default function Projects() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [projs, orgsRes, usersRes] = await Promise.all([
+      const [projs, orgsRes, usersRes, refsRes] = await Promise.all([
         listProjects(),
         listAdminOrganizations().catch(() => ({ items: [] as AdminOrganization[] })),
         listAdminUsers().catch(() => ({ items: [] as AdminUser[] })),
+        listReferentials(true).catch(() => ({ items: [] as Referential[] })),
       ]);
       setProjects(projs);
       setOrganizations(orgsRes.items);
       setUsers(usersRes.items);
+      setReferentials(refsRes.items);
       try {
         setTemplates(await listProjectTemplates());
       } catch {
@@ -351,6 +362,16 @@ export default function Projects() {
         organizations={organizations}
         users={users}
         templates={templates}
+        referentials={referentials}
+        canChangeOrganization={canChangeOrganization}
+        defaultOrganizationId={user?.organizationId ?? null}
+        onOrganizationCreated={(org) =>
+          setOrganizations((prev) => upsertOrganization(prev, org))
+        }
+        canManageReferentials={canChangeOrganization}
+        onReferentialCreated={(ref) =>
+          setReferentials((prev) => upsertReferential(prev, ref))
+        }
         onClose={closeModal}
         onSubmit={handleFormSubmit}
       />

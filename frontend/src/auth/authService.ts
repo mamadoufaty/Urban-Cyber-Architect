@@ -24,6 +24,7 @@ export function loadSession(): AuthSession | null {
       localStorage.removeItem(STORAGE_KEY);
       return null;
     }
+    session.user.organizationId = session.user.organizationId ?? null;
     return session;
   } catch {
     localStorage.removeItem(STORAGE_KEY);
@@ -44,6 +45,7 @@ function toAuthUser(payload: {
   username: string;
   displayName: string;
   role: string;
+  organizationId?: string | null;
 }): AuthUser {
   if (!isUserRole(payload.role)) {
     throw new Error("Identifiants invalides.");
@@ -53,6 +55,7 @@ function toAuthUser(payload: {
     username: payload.username,
     displayName: payload.displayName,
     role: payload.role as UserRole,
+    organizationId: payload.organizationId ?? null,
   };
 }
 
@@ -68,7 +71,13 @@ export async function authenticate(username: string, password: string): Promise<
   }
 
   const data = (await response.json()) as {
-    user: { id: string; username: string; displayName: string; role: string };
+    user: {
+      id: string;
+      username: string;
+      displayName: string;
+      role: string;
+      organizationId?: string | null;
+    };
   };
   const user = toAuthUser(data.user);
 
@@ -77,4 +86,42 @@ export async function authenticate(username: string, password: string): Promise<
     accessToken: `session-${user.id}-${Date.now()}`,
     expiresAt: Date.now() + SESSION_TTL_MS,
   };
+}
+
+export interface BootstrapStatus {
+  needs_bootstrap: boolean;
+  bootstrap_enabled: boolean;
+  message: string | null;
+}
+
+export async function fetchBootstrapStatus(): Promise<BootstrapStatus> {
+  const response = await fetch(`${API_BASE}/auth/bootstrap/status`);
+  if (!response.ok) {
+    return { needs_bootstrap: false, bootstrap_enabled: false, message: null };
+  }
+  return response.json() as Promise<BootstrapStatus>;
+}
+
+export async function bootstrapAdmin(payload: {
+  username: string;
+  password: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+}): Promise<void> {
+  const response = await fetch(`${API_BASE}/auth/bootstrap`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    let message = "Création administrateur impossible.";
+    try {
+      const body = (await response.json()) as { detail?: string };
+      if (body.detail) message = body.detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  }
 }

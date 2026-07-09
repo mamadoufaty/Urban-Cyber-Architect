@@ -32,6 +32,7 @@ export type EbiosIntegrationHook = {
 export type EbiosAssessment = {
   id: string;
   project_id: string;
+  cartography_id: string | null;
   title: string;
   description: string | null;
   status: string;

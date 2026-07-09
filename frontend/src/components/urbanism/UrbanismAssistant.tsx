@@ -20,6 +20,8 @@ import UrbanismProgressBar from "./UrbanismProgressBar";
 
 interface Props {
   projectId: string;
+  cartographyId?: string;
+  readOnly?: boolean;
   onSaved: (analysis?: UrbanismAnalysis) => void;
   liveAnalysis?: UrbanismAnalysis | null;
   hideDeduplicateButton?: boolean;
@@ -39,7 +41,14 @@ function bindingsFromSchema(schema: AssistedFormSchema): Record<string, string[]
   return bindings;
 }
 
-export default function UrbanismAssistant({ projectId, onSaved, liveAnalysis, hideDeduplicateButton }: Props) {
+export default function UrbanismAssistant({
+  projectId,
+  cartographyId,
+  readOnly,
+  onSaved,
+  liveAnalysis,
+  hideDeduplicateButton,
+}: Props) {
   const [metamodel, setMetamodel] = useState<Metamodel | null>(null);
   const [entities, setEntities] = useState<UrbanismEntity[]>([]);
   const [progress, setProgress] = useState<UrbanismProgress | null>(null);
@@ -61,19 +70,19 @@ export default function UrbanismAssistant({ projectId, onSaved, liveAnalysis, hi
   const refreshMeta = useCallback(async () => {
     const [mm, ents, prog] = await Promise.all([
       getMetamodel(),
-      listUrbanismEntities(projectId),
-      getUrbanismProgress(projectId),
+      listUrbanismEntities(projectId, cartographyId),
+      getUrbanismProgress(projectId, cartographyId),
     ]);
     setMetamodel(mm);
     setEntities(ents);
     setProgress(prog);
-  }, [projectId]);
+  }, [projectId, cartographyId]);
 
   const loadSchema = useCallback(async (type: string) => {
-    const s = await getAssistantFormSchema(projectId, type);
+    const s = await getAssistantFormSchema(projectId, type, cartographyId);
     setSchema(s);
     setBindings(bindingsFromSchema(s));
-  }, [projectId]);
+  }, [projectId, cartographyId]);
 
   useEffect(() => {
     refreshMeta().catch((e) => setError(e instanceof Error ? e.message : "Erreur"));
@@ -122,11 +131,15 @@ export default function UrbanismAssistant({ projectId, onSaved, liveAnalysis, hi
     setSaving(true);
     setError(null);
     try {
-      const result = await assistantCreate(projectId, {
-        entity_type: entityType,
-        label: label.trim(),
-        bindings,
-      });
+      const result = await assistantCreate(
+        projectId,
+        {
+          entity_type: entityType,
+          label: label.trim(),
+          bindings,
+        },
+        cartographyId
+      );
       setLabel("");
       setLocalAnalysis(result.analysis);
       await refreshMeta();
@@ -145,12 +158,16 @@ export default function UrbanismAssistant({ projectId, onSaved, liveAnalysis, hi
     setSaving(true);
     setError(null);
     try {
-      const result = await assistantLink(projectId, {
-        action: linkAction,
-        rule_id: linkRuleId,
-        source_id: linkSourceId,
-        target_id: linkTargetId,
-      });
+      const result = await assistantLink(
+        projectId,
+        {
+          action: linkAction,
+          rule_id: linkRuleId,
+          source_id: linkSourceId,
+          target_id: linkTargetId,
+        },
+        cartographyId
+      );
       setLocalAnalysis(result.analysis);
       await refreshMeta();
       onSaved(result.analysis);
@@ -197,9 +214,15 @@ export default function UrbanismAssistant({ projectId, onSaved, liveAnalysis, hi
           Répondez aux questions — le moteur crée automatiquement les objets et relations Club Urba (R01–R30).
         </p>
 
+        {readOnly && (
+          <p className="cartography-readonly-hint">
+            Version consultée en lecture seule — restaurez-la pour pouvoir la modifier.
+          </p>
+        )}
+
         {error && <div className="project-error" style={{ marginBottom: "0.75rem" }}>{error}</div>}
 
-        {tab === "create" && schema && (
+        {!readOnly && tab === "create" && schema && (
           <form className="entity-create-form" onSubmit={handleCreate}>
             <div className="form-group">
               <label>Type d&apos;objet</label>
@@ -281,11 +304,11 @@ export default function UrbanismAssistant({ projectId, onSaved, liveAnalysis, hi
           </form>
         )}
 
-        {tab === "link" && !metamodel && (
+        {!readOnly && tab === "link" && !metamodel && (
           <p className="zone-item-empty">Chargement du métamodèle…</p>
         )}
 
-        {tab === "link" && metamodel && (
+        {!readOnly && tab === "link" && metamodel && (
           <form className="entity-create-form" onSubmit={handleLink}>
             <div className="form-group">
               <label>Objet source</label>
@@ -357,8 +380,9 @@ export default function UrbanismAssistant({ projectId, onSaved, liveAnalysis, hi
 
         <UrbanismAnalysisPanel
           projectId={projectId}
+          cartographyId={cartographyId}
           analysis={analysis}
-          hideDeduplicateButton={hideDeduplicateButton}
+          hideDeduplicateButton={hideDeduplicateButton || readOnly}
           onDeduplicated={(next) => {
             setLocalAnalysis(next);
             onSaved(next);

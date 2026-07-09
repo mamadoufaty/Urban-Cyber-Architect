@@ -43,6 +43,7 @@ import PromptStudio from "./pages/PromptStudio";
 import KnowledgeBase from "./pages/KnowledgeBase";
 
 import UrbanismSchema from "./pages/UrbanismSchema";
+import UrbanismImport from "./pages/UrbanismImport";
 
 import MetamodelValidation from "./pages/MetamodelValidation";
 
@@ -60,6 +61,8 @@ import Livrables from "./pages/Livrables";
 import AdminUsers from "./pages/administration/AdminUsers";
 
 import AdminOrganizations from "./pages/administration/AdminOrganizations";
+
+import AdminReferentials from "./pages/administration/AdminReferentials";
 
 import WazuhDashboard from "./pages/soc/WazuhDashboard";
 
@@ -359,6 +362,22 @@ function AppShell() {
 
           <Route
 
+            path="/import-cartographie"
+
+            element={
+
+              <Guarded module="urbanism">
+
+                <UrbanismImport />
+
+              </Guarded>
+
+            }
+
+          />
+
+          <Route
+
             path="/validation-metamodele"
 
             element={
@@ -542,6 +561,22 @@ function AppShell() {
               <Guarded module="administration">
 
                 <AdminOrganizations />
+
+              </Guarded>
+
+            }
+
+          />
+
+          <Route
+
+            path="/administration/referentials"
+
+            element={
+
+              <Guarded module="administration">
+
+                <AdminReferentials />
 
               </Guarded>
 

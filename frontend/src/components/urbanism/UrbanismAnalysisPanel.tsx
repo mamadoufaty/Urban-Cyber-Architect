@@ -4,6 +4,7 @@ import type { UrbanismAnalysis } from "./metamodel";
 
 interface Props {
   projectId: string;
+  cartographyId?: string;
   analysis: UrbanismAnalysis | null;
   onDeduplicated?: (analysis: UrbanismAnalysis) => void;
   hideDeduplicateButton?: boolean;
@@ -27,7 +28,13 @@ function dedupeOrphans(orphans: UrbanismAnalysis["orphans"]) {
   });
 }
 
-export default function UrbanismAnalysisPanel({ projectId, analysis, onDeduplicated, hideDeduplicateButton }: Props) {
+export default function UrbanismAnalysisPanel({
+  projectId,
+  cartographyId,
+  analysis,
+  onDeduplicated,
+  hideDeduplicateButton,
+}: Props) {
   const [cleaning, setCleaning] = useState(false);
   const [cleanError, setCleanError] = useState<string | null>(null);
 
@@ -46,7 +53,7 @@ export default function UrbanismAnalysisPanel({ projectId, analysis, onDeduplica
     setCleaning(true);
     setCleanError(null);
     try {
-      const result = await deduplicateUrbanism(projectId);
+      const result = await deduplicateUrbanism(projectId, cartographyId);
       onDeduplicated?.(result.analysis);
     } catch (e) {
       setCleanError(e instanceof Error ? e.message : "Erreur de déduplication");

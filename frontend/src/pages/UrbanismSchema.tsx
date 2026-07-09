@@ -40,7 +40,19 @@ import {
   layoutsFromNodes,
 } from "../components/urbanism/nodeLayoutAlign";
 import { exportUrbanismPdf } from "../components/urbanism/exportPdf";
+import { buildExportFilename, downloadTextFile, graphToCsvString, graphToJsonString } from "../components/urbanism/exportData";
 import UrbanismRibbon from "../components/urbanism/UrbanismRibbon";
+import CartographyBanner from "../components/urbanism/CartographyBanner";
+import CreateCartographyModal from "../components/urbanism/CreateCartographyModal";
+import NameCartographyModal from "../components/urbanism/NameCartographyModal";
+import CartographyHistoryModal from "../components/urbanism/CartographyHistoryModal";
+import {
+  isCartographyEditable,
+  isHistoricalVersionSelected,
+  resolveDefaultCartographyId,
+  resolveDefaultVersionId,
+  type CartographyCreateInput,
+} from "../components/urbanism/cartographySelect";
 import { FIT_VIEW_PADDING, type ChartMode } from "../components/urbanism/urbanismTypes";
 import "../styles/urbanism-beta.css";
 import {
@@ -50,16 +62,32 @@ import {
   type UrbanismGraph,
 } from "../components/urbanism/metamodel";
 import {
+  activateCartography,
+  archiveCartography,
   clearEdgeLayout,
   clearEntityLayout,
+  createCartography,
+  createNewCartographyVersion,
+  deduplicateUrbanism,
+  duplicateCartography,
+  getCartographyHistory,
   getUrbanismGraph,
+  listCartographies,
+  listCartographyVersions,
   listProjects,
+  restoreCartographyVersion,
   saveEdgeLayout,
   saveEntityLayout,
   saveEntityLayoutsBulk,
-  deduplicateUrbanism,
+  submitCartographyForValidation,
+  unarchiveCartography,
+  validateCartography as apiValidateCartography,
+  type Cartography,
+  type CartographyHistoryEntry,
+  type CartographyVersion,
   type Project,
 } from "../api";
+import { useAuth } from "../context/AuthContext";
 
 const nodeTypes = { urbanism: UrbanismNode, layerBand: LayerBandNode };
 const edgeTypes = { urbanismEdge: UrbanismEdge };
@@ -67,6 +95,8 @@ const edgeTypes = { urbanismEdge: UrbanismEdge };
 function SchemaCanvas({
   graph,
   projectId,
+  cartographyId,
+  readOnly,
   projects,
   selectedProjectId,
   onProjectChange,
@@ -78,9 +108,12 @@ function SchemaCanvas({
   activeCategories,
   onLayoutChanged,
   onAnalysisUpdated,
+  onCartographyMetaChanged,
 }: {
   graph: UrbanismGraph;
   projectId: string;
+  cartographyId?: string;
+  readOnly?: boolean;
   projects: Project[];
   selectedProjectId: string;
   onProjectChange: (id: string) => void;
@@ -92,6 +125,10 @@ function SchemaCanvas({
   activeCategories: Set<RelationCategory> | null;
   onLayoutChanged?: () => void;
   onAnalysisUpdated?: (analysis: UrbanismAnalysis) => void;
+  /** Rafraîchit juste les métadonnées (statut/version) du bandeau, sans recharger
+   * le graphe — utilisé après un déplacement qui a pu déclencher une copie-sur-
+   * écriture silencieuse côté serveur (version validée → nouveau brouillon). */
+  onCartographyMetaChanged?: () => void;
 }) {
   const flowRef = useRef<HTMLDivElement>(null);
   const { fitView, screenToFlowPosition } = useReactFlow();
@@ -201,7 +238,7 @@ function SchemaCanvas({
         data.labelOffsetY
       );
       try {
-        await saveEdgeLayout(projectId, edgeId, payload);
+        await saveEdgeLayout(projectId, edgeId, payload, cartographyId);
         setEdges((prev) =>
           prev.map((e) =>
             e.id === edgeId
@@ -218,17 +255,18 @@ function SchemaCanvas({
         );
         setSaveStatus("Tracé enregistré");
         setTimeout(() => setSaveStatus(null), 2000);
+        onCartographyMetaChanged?.();
       } catch {
         setSaveStatus("Erreur d'enregistrement");
       }
     },
-    [edges, projectId]
+    [edges, projectId, cartographyId, onCartographyMetaChanged]
   );
 
   const persistNodeLayout = useCallback(
     async (entityId: string, position: { x: number; y: number }) => {
       try {
-        await saveEntityLayout(projectId, entityId, position);
+        await saveEntityLayout(projectId, entityId, position, cartographyId);
         setNodes((prev) =>
           prev.map((n) =>
             n.id === entityId
@@ -246,11 +284,12 @@ function SchemaCanvas({
         );
         setSaveStatus("Position enregistrée");
         setTimeout(() => setSaveStatus(null), 2000);
+        onCartographyMetaChanged?.();
       } catch {
         setSaveStatus("Erreur d'enregistrement");
       }
     },
-    [projectId]
+    [projectId, cartographyId, onCartographyMetaChanged]
   );
 
   const persistNodeLayoutsBulk = useCallback(
@@ -258,18 +297,19 @@ function SchemaCanvas({
       const layouts = layoutsFromNodes(updatedNodes);
       if (!layouts.length) return;
       try {
-        await saveEntityLayoutsBulk(projectId, layouts);
+        await saveEntityLayoutsBulk(projectId, layouts, cartographyId);
         setNodes((prev) => {
           const byId = new Map(updatedNodes.map((n) => [n.id, n]));
           return prev.map((n) => byId.get(n.id) ?? n);
         });
         setSaveStatus("Positions enregistrées");
         setTimeout(() => setSaveStatus(null), 2000);
+        onCartographyMetaChanged?.();
       } catch {
         setSaveStatus("Erreur d'enregistrement");
       }
     },
-    [projectId]
+    [projectId, cartographyId, onCartographyMetaChanged]
   );
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
@@ -335,7 +375,7 @@ function SchemaCanvas({
   const resetSelectedNodesLayout = useCallback(async () => {
     if (!selectedNodeIds.length) return;
     try {
-      await Promise.all(selectedNodeIds.map((id) => clearEntityLayout(projectId, id)));
+      await Promise.all(selectedNodeIds.map((id) => clearEntityLayout(projectId, id, cartographyId)));
       onLayoutChanged?.();
       setSelectedNodeIds([]);
       setSaveStatus("Position réinitialisée — placement automatique");
@@ -343,7 +383,7 @@ function SchemaCanvas({
     } catch {
       setSaveStatus("Erreur lors de la réinitialisation");
     }
-  }, [onLayoutChanged, projectId, selectedNodeIds]);
+  }, [onLayoutChanged, projectId, cartographyId, selectedNodeIds]);
 
   const onWaypointDrag = useCallback(
     (edgeId: string, index: number, point: { x: number; y: number }) => {
@@ -448,7 +488,7 @@ function SchemaCanvas({
   const resetSelectedEdgeLayout = useCallback(async () => {
     if (!selectedEdgeId) return;
     try {
-      await clearEdgeLayout(projectId, selectedEdgeId);
+      await clearEdgeLayout(projectId, selectedEdgeId, cartographyId);
       onLayoutChanged?.();
       setSelectedEdgeId(null);
       setSaveStatus("Tracé réinitialisé — routage automatique");
@@ -456,7 +496,7 @@ function SchemaCanvas({
     } catch {
       setSaveStatus("Erreur lors de la réinitialisation");
     }
-  }, [graph, onLayoutChanged, projectId, selectedEdgeId, visibleCouches]);
+  }, [graph, onLayoutChanged, projectId, cartographyId, selectedEdgeId, visibleCouches]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -536,7 +576,7 @@ function SchemaCanvas({
   const handleDeduplicate = useCallback(async () => {
     setDeduplicating(true);
     try {
-      const result = await deduplicateUrbanism(projectId);
+      const result = await deduplicateUrbanism(projectId, cartographyId);
       onAnalysisUpdated?.(result.analysis);
       onLayoutChanged?.();
     } catch {
@@ -545,7 +585,7 @@ function SchemaCanvas({
     } finally {
       setDeduplicating(false);
     }
-  }, [onAnalysisUpdated, onLayoutChanged, projectId]);
+  }, [onAnalysisUpdated, onLayoutChanged, projectId, cartographyId]);
 
   const captureMap = useCallback(async () => {
     const viewport = flowRef.current?.querySelector(".react-flow__viewport") as HTMLElement | null;
@@ -566,8 +606,16 @@ function SchemaCanvas({
     await exportUrbanismPdf(graph, dataUrl, author);
   }, [captureMap, graph, author]);
 
+  const handleExportJson = useCallback(() => {
+    downloadTextFile(buildExportFilename(graph, "json"), graphToJsonString(graph), "application/json");
+  }, [graph]);
+
+  const handleExportCsv = useCallback(() => {
+    downloadTextFile(buildExportFilename(graph, "csv"), graphToCsvString(graph), "text/csv");
+  }, [graph]);
+
   const isEmpty = graph.stats.total_objects === 0;
-  const editMode = chartMode === "edit";
+  const editMode = chartMode === "edit" && !readOnly;
 
   return (
     <div className="urbanism-map-stack">
@@ -594,17 +642,20 @@ function SchemaCanvas({
         }}
         onExportPng={() => void handleExportPng()}
         onExportPdf={() => void handleExportPdf()}
+        onExportJson={handleExportJson}
+        onExportCsv={handleExportCsv}
         exportDisabled={isEmpty}
         author={author}
         onAuthorChange={setAuthor}
         onDeduplicate={() => void handleDeduplicate()}
-        deduplicateDisabled={isEmpty}
+        deduplicateDisabled={isEmpty || Boolean(readOnly)}
         deduplicating={deduplicating}
         showResetEdge={editMode && Boolean(selectedEdgeId)}
         showResetNodes={editMode && selectedNodeIds.length > 0}
         onResetEdge={() => void resetSelectedEdgeLayout()}
         onResetNodes={() => void resetSelectedNodesLayout()}
         saveStatus={saveStatus}
+        readOnly={readOnly}
       />
 
       <div className={`ua-mode-bar ${editMode ? "ua-mode-bar-edit" : "ua-mode-bar-auto"}`}>
@@ -658,7 +709,7 @@ function SchemaCanvas({
 
       {isEmpty && (
         <div className="ua-panel urbanism-empty-hint">
-          Graphe vide — utilisez l&apos;assistant pour créer votre première cartographie.
+          Cette cartographie est vide. Commencez à créer vos premiers objets.
         </div>
       )}
 
@@ -714,6 +765,8 @@ function SchemaCanvas({
 }
 
 export default function UrbanismSchema() {
+  const { user } = useAuth();
+  const authorName = user?.displayName ?? undefined;
   const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedId, setSelectedId] = useState(searchParams.get("project") ?? "");
@@ -725,24 +778,83 @@ export default function UrbanismSchema() {
   const [expertMode, setExpertMode] = useState(false);
   const [liveAnalysis, setLiveAnalysis] = useState<UrbanismAnalysis | null>(null);
 
+  const [cartographies, setCartographies] = useState<Cartography[]>([]);
+  const [selectedCartographyId, setSelectedCartographyId] = useState<string | null>(
+    searchParams.get("cartography")
+  );
+  const [versions, setVersions] = useState<CartographyVersion[]>([]);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [cartographyBusy, setCartographyBusy] = useState(false);
+  const [cartographyError, setCartographyError] = useState<string | null>(null);
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [nameModal, setNameModal] = useState<"duplicate" | "save-as" | null>(null);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyEntries, setHistoryEntries] = useState<CartographyHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  const currentCartography = useMemo(
+    () => cartographies.find((c) => c.id === selectedCartographyId) ?? null,
+    [cartographies, selectedCartographyId]
+  );
+  const isHistoricalVersion = useMemo(
+    () => isHistoricalVersionSelected(versions, selectedVersionId),
+    [versions, selectedVersionId]
+  );
+  const readOnly = isHistoricalVersion || !isCartographyEditable(currentCartography);
+
+  const reloadCartographies = useCallback(
+    async (opts?: { preferredId?: string }) => {
+      if (!selectedId) {
+        setCartographies([]);
+        setSelectedCartographyId(null);
+        return;
+      }
+      try {
+        const res = await listCartographies(selectedId);
+        setCartographies(res.items);
+        setSelectedCartographyId((prev) => opts?.preferredId ?? resolveDefaultCartographyId(res.items, prev));
+      } catch (e) {
+        setCartographyError(e instanceof Error ? e.message : "Erreur de chargement des cartographies");
+      }
+    },
+    [selectedId]
+  );
+
+  const reloadVersions = useCallback(async (cartographyId: string) => {
+    try {
+      const res = await listCartographyVersions(cartographyId);
+      setVersions(res.items);
+      setSelectedVersionId(resolveDefaultVersionId(res.items, null));
+    } catch (e) {
+      setCartographyError(e instanceof Error ? e.message : "Erreur de chargement des versions");
+    }
+  }, []);
+
   const refreshGraph = useCallback(() => {
     if (!selectedId) return;
     const cats = relationFilters.size > 0 ? [...relationFilters] : undefined;
-    getUrbanismGraph(selectedId, cats)
+    const versionParam = isHistoricalVersion ? selectedVersionId ?? undefined : undefined;
+    getUrbanismGraph(selectedId, cats, selectedCartographyId ?? undefined, versionParam)
       .then((g) => {
         setGraph(g);
         setLiveAnalysis(g.analysis);
       })
       .catch((e) => setLoadError(e instanceof Error ? e.message : "Erreur"));
     setGraphKey((k) => k + 1);
-  }, [selectedId, relationFilters]);
+  }, [selectedId, relationFilters, selectedCartographyId, selectedVersionId, isHistoricalVersion]);
 
-  const onAssistantSaved = useCallback(
+  const onGraphMutated = useCallback(
     (analysis?: UrbanismAnalysis) => {
       if (analysis) setLiveAnalysis(analysis);
       refreshGraph();
+      if (selectedCartographyId) {
+        void reloadCartographies({ preferredId: selectedCartographyId });
+        void reloadVersions(selectedCartographyId);
+      }
     },
-    [refreshGraph]
+    [refreshGraph, selectedCartographyId, reloadCartographies, reloadVersions]
   );
 
   useEffect(() => {
@@ -755,18 +867,32 @@ export default function UrbanismSchema() {
   }, [searchParams]);
 
   useEffect(() => {
+    reloadCartographies();
+  }, [reloadCartographies]);
+
+  useEffect(() => {
+    if (!selectedCartographyId) {
+      setVersions([]);
+      setSelectedVersionId(null);
+      return;
+    }
+    reloadVersions(selectedCartographyId);
+  }, [selectedCartographyId, reloadVersions]);
+
+  useEffect(() => {
     if (!selectedId) return;
     setLoading(true);
     setLoadError(null);
     const cats = relationFilters.size > 0 ? [...relationFilters] : undefined;
-    getUrbanismGraph(selectedId, cats)
+    const versionParam = isHistoricalVersion ? selectedVersionId ?? undefined : undefined;
+    getUrbanismGraph(selectedId, cats, selectedCartographyId ?? undefined, versionParam)
       .then((g) => {
         setGraph(g);
         setLiveAnalysis(g.analysis);
       })
       .catch((e) => setLoadError(e instanceof Error ? e.message : "Erreur"))
       .finally(() => setLoading(false));
-  }, [selectedId, relationFilters, graphKey]);
+  }, [selectedId, relationFilters, graphKey, selectedCartographyId, selectedVersionId, isHistoricalVersion]);
 
   const toggleRelationFilter = (id: RelationCategory) => {
     setRelationFilters((prev) => {
@@ -777,49 +903,263 @@ export default function UrbanismSchema() {
     });
   };
 
+  function handleProjectChange(id: string) {
+    setSelectedId(id);
+    setSelectedCartographyId(null);
+    setSearchParams(id ? { project: id } : {});
+  }
+
+  function handleCartographyChange(id: string) {
+    setSelectedCartographyId(id);
+    if (id) void activateCartography(id).catch(() => undefined);
+  }
+
+  async function handleCreateCartography(values: CartographyCreateInput) {
+    if (!selectedId) return;
+    setCartographyBusy(true);
+    setCartographyError(null);
+    try {
+      const created = await createCartography(selectedId, {
+        name: values.name,
+        type: values.type,
+        description: values.description || null,
+        author: authorName,
+      });
+      await reloadCartographies({ preferredId: created.id });
+      setShowCreateModal(false);
+    } catch (e) {
+      setCartographyError(e instanceof Error ? e.message : "Erreur de création de la cartographie");
+    } finally {
+      setCartographyBusy(false);
+    }
+  }
+
+  async function handleNameModalSubmit(name: string) {
+    if (!currentCartography) return;
+    setCartographyBusy(true);
+    setCartographyError(null);
+    try {
+      const clone = await duplicateCartography(currentCartography.id, name, authorName);
+      await reloadCartographies({ preferredId: clone.id });
+      setNameModal(null);
+    } catch (e) {
+      setCartographyError(e instanceof Error ? e.message : "Erreur de duplication");
+    } finally {
+      setCartographyBusy(false);
+    }
+  }
+
+  async function handleNewVersion() {
+    if (!currentCartography) return;
+    setCartographyBusy(true);
+    setCartographyError(null);
+    try {
+      await createNewCartographyVersion(currentCartography.id, authorName);
+      await reloadCartographies({ preferredId: currentCartography.id });
+      await reloadVersions(currentCartography.id);
+    } catch (e) {
+      setCartographyError(e instanceof Error ? e.message : "Erreur de création de version");
+    } finally {
+      setCartographyBusy(false);
+    }
+  }
+
+  async function handleSubmitForValidation() {
+    if (!currentCartography) return;
+    setCartographyBusy(true);
+    try {
+      await submitCartographyForValidation(currentCartography.id, authorName);
+      await reloadCartographies({ preferredId: currentCartography.id });
+      await reloadVersions(currentCartography.id);
+    } catch (e) {
+      setCartographyError(e instanceof Error ? e.message : "Erreur de soumission");
+    } finally {
+      setCartographyBusy(false);
+    }
+  }
+
+  async function handleValidate() {
+    if (!currentCartography) return;
+    setCartographyBusy(true);
+    try {
+      await apiValidateCartography(currentCartography.id, { validated_by: authorName });
+      await reloadCartographies({ preferredId: currentCartography.id });
+      await reloadVersions(currentCartography.id);
+    } catch (e) {
+      setCartographyError(e instanceof Error ? e.message : "Erreur de validation");
+    } finally {
+      setCartographyBusy(false);
+    }
+  }
+
+  async function handleArchiveToggle() {
+    if (!currentCartography) return;
+    setCartographyBusy(true);
+    try {
+      if (currentCartography.is_archived) {
+        await unarchiveCartography(currentCartography.id, authorName);
+      } else {
+        await archiveCartography(currentCartography.id, authorName);
+      }
+      await reloadCartographies({ preferredId: currentCartography.id });
+      await reloadVersions(currentCartography.id);
+    } catch (e) {
+      setCartographyError(e instanceof Error ? e.message : "Erreur d'archivage");
+    } finally {
+      setCartographyBusy(false);
+    }
+  }
+
+  async function handleOpenHistory() {
+    if (!currentCartography) return;
+    setShowHistoryModal(true);
+    setHistoryLoading(true);
+    try {
+      const [historyRes, versionsRes] = await Promise.all([
+        getCartographyHistory(currentCartography.id),
+        listCartographyVersions(currentCartography.id),
+      ]);
+      setHistoryEntries(historyRes.items);
+      setVersions(versionsRes.items);
+    } catch (e) {
+      setCartographyError(e instanceof Error ? e.message : "Erreur de chargement de l'historique");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function handleRestore(versionId: string) {
+    if (!currentCartography) return;
+    setRestoring(true);
+    try {
+      await restoreCartographyVersion(currentCartography.id, versionId, authorName);
+      await reloadCartographies({ preferredId: currentCartography.id });
+      await reloadVersions(currentCartography.id);
+      setShowHistoryModal(false);
+    } catch (e) {
+      setCartographyError(e instanceof Error ? e.message : "Erreur de restauration");
+    } finally {
+      setRestoring(false);
+    }
+  }
+
   return (
     <div className="urbanism-workspace">
       {loadError && <div className="ua-panel ua-error">{loadError}</div>}
-
-      {selectedId && (
-        <div className="urbanism-workspace-body">
-          {expertMode ? (
-            <UrbanismEngineEditor projectId={selectedId} onSaved={refreshGraph} />
-          ) : (
-            <UrbanismAssistant
-              projectId={selectedId}
-              onSaved={onAssistantSaved}
-              liveAnalysis={liveAnalysis}
-              hideDeduplicateButton
-            />
-          )}
-          <div className="urbanism-map-panel">
-            {loading && <div className="ua-panel">Génération de la cartographie…</div>}
-            {!loading && graph && (
-              <ReactFlowProvider key={`${selectedId}-${graphKey}`}>
-                <SchemaCanvas
-                  graph={graph}
-                  projectId={selectedId}
-                  projects={projects}
-                  selectedProjectId={selectedId}
-                  onProjectChange={(id) => {
-                    setSelectedId(id);
-                    setSearchParams(id ? { project: id } : {});
-                  }}
-                  expertMode={expertMode}
-                  onExpertModeChange={setExpertMode}
-                  relationFilters={relationFilters}
-                  onToggleRelationFilter={toggleRelationFilter}
-                  onClearRelationFilters={() => setRelationFilters(new Set())}
-                  activeCategories={relationFilters.size > 0 ? relationFilters : null}
-                  onLayoutChanged={refreshGraph}
-                  onAnalysisUpdated={setLiveAnalysis}
-                />
-              </ReactFlowProvider>
-            )}
-          </div>
+      {cartographyError && (
+        <div className="ua-panel ua-error" role="alert">
+          {cartographyError}
         </div>
       )}
+
+      {selectedId && (
+        <>
+          <CartographyBanner
+            projects={projects}
+            selectedProjectId={selectedId}
+            onProjectChange={handleProjectChange}
+            cartographies={cartographies}
+            selectedCartographyId={selectedCartographyId}
+            onCartographyChange={handleCartographyChange}
+            versions={versions}
+            selectedVersionId={selectedVersionId}
+            onVersionChange={setSelectedVersionId}
+            currentCartography={currentCartography}
+            isHistoricalVersion={isHistoricalVersion}
+            canManage
+            busy={cartographyBusy}
+            onNewCartography={() => setShowCreateModal(true)}
+            onSaveAs={() => setNameModal("save-as")}
+            onDuplicate={() => setNameModal("duplicate")}
+            onNewVersion={() => void handleNewVersion()}
+            onOpenHistory={() => void handleOpenHistory()}
+            onSubmitForValidation={() => void handleSubmitForValidation()}
+            onValidate={() => void handleValidate()}
+            onArchiveToggle={() => void handleArchiveToggle()}
+          />
+
+          <div className="urbanism-workspace-body">
+            {expertMode ? (
+              <UrbanismEngineEditor
+                projectId={selectedId}
+                cartographyId={selectedCartographyId ?? undefined}
+                readOnly={readOnly}
+                onSaved={() => onGraphMutated()}
+              />
+            ) : (
+              <UrbanismAssistant
+                projectId={selectedId}
+                cartographyId={selectedCartographyId ?? undefined}
+                readOnly={readOnly}
+                onSaved={onGraphMutated}
+                liveAnalysis={liveAnalysis}
+                hideDeduplicateButton
+              />
+            )}
+            <div className="urbanism-map-panel">
+              {loading && <div className="ua-panel">Génération de la cartographie…</div>}
+              {!loading && graph && (
+                <ReactFlowProvider key={`${selectedId}-${selectedCartographyId}-${selectedVersionId}-${graphKey}`}>
+                  <SchemaCanvas
+                    graph={graph}
+                    projectId={selectedId}
+                    cartographyId={selectedCartographyId ?? undefined}
+                    readOnly={readOnly}
+                    projects={projects}
+                    selectedProjectId={selectedId}
+                    onProjectChange={handleProjectChange}
+                    expertMode={expertMode}
+                    onExpertModeChange={setExpertMode}
+                    relationFilters={relationFilters}
+                    onToggleRelationFilter={toggleRelationFilter}
+                    onClearRelationFilters={() => setRelationFilters(new Set())}
+                    activeCategories={relationFilters.size > 0 ? relationFilters : null}
+                    onLayoutChanged={() => onGraphMutated()}
+                    onAnalysisUpdated={setLiveAnalysis}
+                    onCartographyMetaChanged={() => {
+                      if (selectedCartographyId) {
+                        void reloadCartographies({ preferredId: selectedCartographyId });
+                        void reloadVersions(selectedCartographyId);
+                      }
+                    }}
+                  />
+                </ReactFlowProvider>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      <CreateCartographyModal
+        open={showCreateModal}
+        saving={cartographyBusy}
+        error={cartographyError}
+        onClose={() => setShowCreateModal(false)}
+        onSubmit={(values) => void handleCreateCartography(values)}
+      />
+
+      <NameCartographyModal
+        open={nameModal !== null}
+        mode={nameModal ?? "duplicate"}
+        sourceName={currentCartography?.name ?? ""}
+        existingNames={cartographies.map((c) => c.name)}
+        saving={cartographyBusy}
+        error={cartographyError}
+        onClose={() => setNameModal(null)}
+        onSubmit={(name) => void handleNameModalSubmit(name)}
+      />
+
+      <CartographyHistoryModal
+        open={showHistoryModal}
+        cartographyName={currentCartography?.name ?? ""}
+        history={historyEntries}
+        versions={versions}
+        loading={historyLoading}
+        restoring={restoring}
+        canRestore={!currentCartography?.is_archived}
+        onClose={() => setShowHistoryModal(false)}
+        onRestore={(versionId) => void handleRestore(versionId)}
+      />
     </div>
   );
 }

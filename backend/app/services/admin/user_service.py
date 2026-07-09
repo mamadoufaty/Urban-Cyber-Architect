@@ -11,6 +11,11 @@ from sqlalchemy.orm import selectinload
 
 from app.models.admin import Organization, Role, User
 from app.schemas.admin import UserCreate, UserRead, UserUpdate
+from app.services.admin.admin_guard import (
+    LastAdministratorError,
+    ensure_admin_remains,
+    ensure_role_change_keeps_admin,
+)
 from app.services.password_service import hash_password
 
 
@@ -102,6 +107,7 @@ async def update_user(db: AsyncSession, user_id: UUID, data: UserUpdate) -> User
                 raise ValueError("Organisation introuvable")
         user.organization_id = data.organization_id
     if data.role_id is not None:
+        await ensure_role_change_keeps_admin(db, user_id, data.role_id)
         if data.role_id:
             role = await db.get(Role, data.role_id)
             if not role:
@@ -117,6 +123,7 @@ async def update_user(db: AsyncSession, user_id: UUID, data: UserUpdate) -> User
 
 
 async def disable_user(db: AsyncSession, user_id: UUID) -> UserRead:
+    await ensure_admin_remains(db, user_id)
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
@@ -152,6 +159,7 @@ async def reset_password(db: AsyncSession, user_id: UUID, password: str) -> User
 
 
 async def delete_user(db: AsyncSession, user_id: UUID) -> None:
+    await ensure_admin_remains(db, user_id)
     user = await db.get(User, user_id)
     if not user:
         raise ValueError("Utilisateur introuvable")

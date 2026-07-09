@@ -54,7 +54,7 @@ async def test_login_success_for_seed_admin(db_session: AsyncSession):
         assert response.status_code == 200
         body = response.json()
         assert body["user"]["username"] == "admin"
-        assert body["user"]["role"] == "admin"
+        assert body["user"]["role"] == "superadmin"
         assert body["user"]["displayName"]
         assert "password_hash" not in response.text
 
@@ -66,7 +66,7 @@ async def test_login_success_for_seed_admin(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_login_success_for_rssi(db_session: AsyncSession):
+async def test_login_success_for_demo(db_session: AsyncSession):
     async def override_get_db():
         yield db_session
 
@@ -76,10 +76,10 @@ async def test_login_success_for_rssi(db_session: AsyncSession):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/api/auth/login",
-            json={"username": "rssi", "password": "Rssi@123"},
+            json={"username": "demo", "password": "Demo@123"},
         )
         assert response.status_code == 200
-        assert response.json()["user"]["role"] == "rssi"
+        assert response.json()["user"]["role"] == "consultant"
 
     fastapi_app.dependency_overrides.clear()
 
@@ -105,7 +105,7 @@ async def test_login_invalid_credentials(db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_login_rejects_disabled_user(db_session: AsyncSession):
-    result = await db_session.execute(select(User).where(User.username == "consultant"))
+    result = await db_session.execute(select(User).where(User.username == "demo"))
     user = result.scalar_one()
     await disable_user(db_session, user.id)
     await db_session.commit()
@@ -119,7 +119,7 @@ async def test_login_rejects_disabled_user(db_session: AsyncSession):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/api/auth/login",
-            json={"username": "consultant", "password": "Consultant@123"},
+            json={"username": "demo", "password": "Demo@123"},
         )
         assert response.status_code == 401
         assert response.json()["detail"] == "Identifiants invalides."

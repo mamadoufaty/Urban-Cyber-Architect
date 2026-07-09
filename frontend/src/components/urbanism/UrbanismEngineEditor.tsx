@@ -11,6 +11,8 @@ import type { CreationGuideItem, Metamodel, UrbanismEntity, UrbanismRelation } f
 
 interface Props {
   projectId: string;
+  cartographyId?: string;
+  readOnly?: boolean;
   onSaved: () => void;
 }
 
@@ -24,7 +26,7 @@ function guideKey(g: CreationGuideItem) {
   return `${g.relation_id}-${g.direction}-${g.peer_type}-${g.relation_type}`;
 }
 
-export default function UrbanismEngineEditor({ projectId, onSaved }: Props) {
+export default function UrbanismEngineEditor({ projectId, cartographyId, readOnly, onSaved }: Props) {
   const [metamodel, setMetamodel] = useState<Metamodel | null>(null);
   const [entities, setEntities] = useState<UrbanismEntity[]>([]);
   const [relations, setRelations] = useState<UrbanismRelation[]>([]);
@@ -41,8 +43,8 @@ export default function UrbanismEngineEditor({ projectId, onSaved }: Props) {
     try {
       const [mm, ents, rels] = await Promise.all([
         getMetamodel(),
-        listUrbanismEntities(projectId),
-        listUrbanismRelations(projectId),
+        listUrbanismEntities(projectId, cartographyId),
+        listUrbanismRelations(projectId, cartographyId),
       ]);
       setMetamodel(mm);
       setEntities(ents);
@@ -53,7 +55,7 @@ export default function UrbanismEngineEditor({ projectId, onSaved }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, cartographyId]);
 
   useEffect(() => {
     load();
@@ -110,11 +112,15 @@ export default function UrbanismEngineEditor({ projectId, onSaved }: Props) {
     setSaving(true);
     setError(null);
     try {
-      await createUrbanismEntity(projectId, {
-        entity_type: entityType,
-        label: label.trim(),
-        relations: selectedRelations,
-      });
+      await createUrbanismEntity(
+        projectId,
+        {
+          entity_type: entityType,
+          label: label.trim(),
+          relations: selectedRelations,
+        },
+        cartographyId
+      );
       setLabel("");
       setSelectedRelations([]);
       setShowForm(false);
@@ -129,13 +135,13 @@ export default function UrbanismEngineEditor({ projectId, onSaved }: Props) {
 
   const handleDeleteEntity = async (id: string) => {
     if (!confirm("Supprimer cet objet et ses relations ?")) return;
-    await deleteUrbanismEntity(projectId, id);
+    await deleteUrbanismEntity(projectId, id, cartographyId);
     await load();
     onSaved();
   };
 
   const handleDeleteRelation = async (id: string) => {
-    await deleteUrbanismRelation(projectId, id);
+    await deleteUrbanismRelation(projectId, id, cartographyId);
     await load();
     onSaved();
   };
@@ -183,18 +189,26 @@ export default function UrbanismEngineEditor({ projectId, onSaved }: Props) {
     <div className="card club-urba-editor ua-panel">
       <div className="club-urba-editor-header">
         <h3>Moteur d&apos;urbanisme</h3>
-        <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Fermer" : "+ Objet"}
-        </button>
+        {!readOnly && (
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowForm(!showForm)}>
+            {showForm ? "Fermer" : "+ Objet"}
+          </button>
+        )}
       </div>
       <p className="club-urba-editor-hint">
         Le moteur vous guide selon le métamodèle Club Urba (R01–R30). Choisissez un type d&apos;objet :
         seules les relations conformes au schéma sont proposées.
       </p>
 
+      {readOnly && (
+        <p className="cartography-readonly-hint">
+          Version consultée en lecture seule — restaurez-la pour pouvoir la modifier.
+        </p>
+      )}
+
       {error && <div className="project-error" style={{ marginBottom: "0.75rem" }}>{error}</div>}
 
-      {showForm && metamodel && (
+      {!readOnly && showForm && metamodel && (
         <form className="entity-create-form" onSubmit={handleCreate}>
           <div className="form-group">
             <label>Type d&apos;objet</label>
@@ -269,9 +283,11 @@ export default function UrbanismEngineEditor({ projectId, onSaved }: Props) {
                     <div className="entity-card-header">
                       <strong>{ent.label}</strong>
                       <span className="entity-type-tag">{ent.entity_type}</span>
-                      <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDeleteEntity(ent.id)}>
-                        ×
-                      </button>
+                      {!readOnly && (
+                        <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDeleteEntity(ent.id)}>
+                          ×
+                        </button>
+                      )}
                     </div>
                     {entRels.length > 0 && (
                       <ul className="entity-relations-list">
@@ -283,7 +299,9 @@ export default function UrbanismEngineEditor({ projectId, onSaved }: Props) {
                               <span>← <em>{r.relation_type}</em> ← {entityLabel(r.source_id)}</span>
                             )}
                             {r.criticite && <span className="crit-tag">{r.criticite}</span>}
-                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleDeleteRelation(r.id)}>×</button>
+                            {!readOnly && (
+                              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleDeleteRelation(r.id)}>×</button>
+                            )}
                           </li>
                         ))}
                       </ul>

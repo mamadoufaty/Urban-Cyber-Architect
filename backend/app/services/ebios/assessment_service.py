@@ -1,4 +1,20 @@
-"""Services EBIOS RM — orchestration des ateliers (squelette)."""
+"""Services EBIOS RM — orchestration des ateliers (squelette).
+
+Isolation des études
+---------------------
+Une étude EBIOS (:class:`EbiosAssessment`) est rattachée à un ``project_id``
+ET à un ``cartography_id`` : la cartographie constitue la source de données
+de l'étude (biens supports importés en atelier 2, acteurs en atelier 5…),
+mais chaque cartographie possède sa ou ses propres études, jamais partagées.
+Le study_id est simplement l'``id`` de l':class:`EbiosAssessment`.
+
+Ainsi, créer une nouvelle cartographie (ou en importer une nouvelle version)
+ne fait jamais réapparaître les ateliers, scores ou documents d'une étude
+précédente : :func:`get_or_create_assessment` ne résout jamais qu'une étude
+existante pour la cartographie demandée, et en crée une nouvelle — totalement
+vierge (aucun atelier rempli, 0 % de progression, ateliers 2 à 5 verrouillés)
+— si aucune n'existe encore pour cette cartographie.
+"""
 
 from __future__ import annotations
 
@@ -19,6 +35,18 @@ async def _get_project(db: AsyncSession, project_id: UUID) -> Project:
     return project
 
 
+async def _resolve_cartography_id(db: AsyncSession, project_id: UUID) -> UUID | None:
+    """Résout la cartographie active du projet — source de données par défaut
+    d'une étude EBIOS quand aucune cartographie n'est explicitement précisée."""
+    from app.services import cartography_service
+
+    try:
+        cartography = await cartography_service.get_active_cartography(db, project_id)
+    except cartography_service.CartographyError:
+        return None
+    return cartography.id
+
+
 def _seed_workshops(assessment_id: UUID) -> list[EbiosWorkshop]:
     workshops: list[EbiosWorkshop] = []
     for index, spec in enumerate(WORKSHOPS):
@@ -36,35 +64,73 @@ def _seed_workshops(assessment_id: UUID) -> list[EbiosWorkshop]:
     return workshops
 
 
-async def get_or_create_assessment(db: AsyncSession, project_id: UUID) -> EbiosAssessment:
-    await _get_project(db, project_id)
-    result = await db.execute(
-        select(EbiosAssessment)
-        .where(EbiosAssessment.project_id == project_id)
-        .order_by(EbiosAssessment.created_at.desc())
-        .limit(1)
+def _seed_default_reference_documents(assessment_id: UUID) -> list[EbiosRecord]:
+    """Socle documentaire par défaut d'une nouvelle étude (§ Documents de
+    référence — Atelier 1) : toujours ``proposed``, jamais validé d'office."""
+    from app.services.ebios.workshop1_default_documents import (
+        build_default_reference_document_proposals,
     )
+
+    records: list[EbiosRecord] = []
+    for proposal in build_default_reference_document_proposals():
+        records.append(
+            EbiosRecord(
+                assessment_id=assessment_id,
+                workshop_number=1,
+                record_type="reference_document",
+                label=proposal["label"],
+                description=proposal["description"],
+                properties=proposal["properties"],
+                status="proposed",
+            )
+        )
+    return records
+
+
+async def get_or_create_assessment(
+    db: AsyncSession, project_id: UUID, cartography_id: UUID | None = None
+) -> EbiosAssessment:
+    """Résout l'étude EBIOS d'une cartographie (par défaut la cartographie
+    active du projet), et en crée une nouvelle — totalement vierge — si aucune
+    n'existe encore pour cette cartographie précise (§ isolation des études)."""
+    await _get_project(db, project_id)
+    if cartography_id is None:
+        cartography_id = await _resolve_cartography_id(db, project_id)
+
+    query = select(EbiosAssessment).where(EbiosAssessment.project_id == project_id)
+    query = query.where(EbiosAssessment.cartography_id == cartography_id)
+    result = await db.execute(query.order_by(EbiosAssessment.created_at.desc()).limit(1))
     existing = result.scalar_one_or_none()
     if existing:
         return existing
 
-    assessment = EbiosAssessment(project_id=project_id)
+    assessment = EbiosAssessment(project_id=project_id, cartography_id=cartography_id)
     db.add(assessment)
     await db.flush()
     db.add_all(_seed_workshops(assessment.id))
+    db.add_all(_seed_default_reference_documents(assessment.id))
     await db.commit()
     await db.refresh(assessment)
     return assessment
 
 
 async def create_assessment(
-    db: AsyncSession, project_id: UUID, title: str, description: str | None = None
+    db: AsyncSession,
+    project_id: UUID,
+    title: str,
+    description: str | None = None,
+    cartography_id: UUID | None = None,
 ) -> EbiosAssessment:
     await _get_project(db, project_id)
-    assessment = EbiosAssessment(project_id=project_id, title=title, description=description)
+    if cartography_id is None:
+        cartography_id = await _resolve_cartography_id(db, project_id)
+    assessment = EbiosAssessment(
+        project_id=project_id, cartography_id=cartography_id, title=title, description=description
+    )
     db.add(assessment)
     await db.flush()
     db.add_all(_seed_workshops(assessment.id))
+    db.add_all(_seed_default_reference_documents(assessment.id))
     await db.commit()
     await db.refresh(assessment)
     return assessment
@@ -75,6 +141,40 @@ async def get_assessment(db: AsyncSession, project_id: UUID, assessment_id: UUID
     if not assessment or assessment.project_id != project_id:
         raise ValueError("Analyse EBIOS introuvable")
     return assessment
+
+
+async def list_assessments(
+    db: AsyncSession, project_id: UUID, cartography_id: UUID | None = None
+) -> list[EbiosAssessment]:
+    """Liste les études EBIOS d'un projet, éventuellement filtrées par
+    cartographie — chaque étude reste indépendante (aucune donnée partagée)."""
+    await _get_project(db, project_id)
+    query = select(EbiosAssessment).where(EbiosAssessment.project_id == project_id)
+    if cartography_id is not None:
+        query = query.where(EbiosAssessment.cartography_id == cartography_id)
+    query = query.order_by(EbiosAssessment.created_at.desc())
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def backfill_assessment_cartography_ids(db: AsyncSession) -> int:
+    """Backfill de démarrage — rattache les études EBIOS créées avant
+    l'introduction du scoping par cartographie à la cartographie active de
+    leur projet (idempotent, aucune donnée déplacée entre études)."""
+    result = await db.execute(
+        select(EbiosAssessment).where(EbiosAssessment.cartography_id.is_(None))
+    )
+    assessments = list(result.scalars().all())
+    updated = 0
+    for assessment in assessments:
+        cartography_id = await _resolve_cartography_id(db, assessment.project_id)
+        if cartography_id is None:
+            continue
+        assessment.cartography_id = cartography_id
+        updated += 1
+    if updated:
+        await db.commit()
+    return updated
 
 
 async def list_workshops(db: AsyncSession, assessment_id: UUID) -> list[EbiosWorkshop]:

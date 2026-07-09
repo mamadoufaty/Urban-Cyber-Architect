@@ -7,10 +7,24 @@ export const WORKFLOW_PROPOSED = "Proposé";
 export const WORKFLOW_MODIFIED = "Modifié";
 export const WORKFLOW_VALIDATED = "Validé";
 
+/** Motivations types EBIOS RM proposées par le générateur (exemples ANSSI). */
+export const MOTIVATION_OPTIONS = [
+  "Gain financier",
+  "Espionnage",
+  "Sabotage",
+  "Déstabilisation",
+  "Négligence",
+  "Erreur humaine",
+  "Aléa non intentionnel",
+] as const;
+
 export type StrategicScenarioFormData = {
   label: string;
   risk_source_id: string;
+  motivation: string;
   target_objective: string;
+  strategic_objective: string;
+  targeted_essential_asset: string;
   feared_event: string;
   narrative_description: string;
   stakeholder_ids: string[];
@@ -25,7 +39,10 @@ export type StrategicScenarioFormData = {
 export const EMPTY_SCENARIO: StrategicScenarioFormData = {
   label: "",
   risk_source_id: "",
+  motivation: MOTIVATION_OPTIONS[0],
   target_objective: "",
+  strategic_objective: "",
+  targeted_essential_asset: "",
   feared_event: "",
   narrative_description: "",
   stakeholder_ids: [],
@@ -46,6 +63,26 @@ const SEVERITY_TO_LIKELIHOOD: Record<string, string> = {
 function labelsForIds(records: EbiosRecord[], ids: string[]): string[] {
   const idSet = new Set(ids.map(String));
   return records.filter((r) => idSet.has(r.id)).map((r) => r.label);
+}
+
+const MOTIVATION_BY_RISK_SOURCE: Record<string, string> = {
+  Cybercriminel: "Gain financier",
+  "Employé malveillant": "Sabotage",
+  Prestataire: "Négligence",
+  "Sous-traitant": "Négligence",
+  Concurrent: "Espionnage",
+  "APT (menace persistante avancée)": "Espionnage",
+  "Erreur humaine": "Erreur humaine",
+  "Défaillance technique": "Négligence",
+  "Catastrophe naturelle": "Aléa non intentionnel",
+};
+const DEFAULT_MOTIVATION = "Déstabilisation";
+
+function firstSegment(text: string): string {
+  for (const sep of [" ; ", "; ", ", "]) {
+    if (text.includes(sep)) return text.split(sep)[0].trim();
+  }
+  return text.trim();
 }
 
 /** Moteur de génération — remplaçable par OpenAI / Gemini. */
@@ -70,12 +107,14 @@ export function generateStrategicScenario(
     ? stakeholderNames.join(", ")
     : "les parties prenantes identifiées";
   const assetsText = assetNames.length ? assetNames.join(", ") : "les biens supports concernés";
+  const motivation = MOTIVATION_BY_RISK_SOURCE[sourceLabel] ?? DEFAULT_MOTIVATION;
+  const targetedEssentialAsset = target ? firstSegment(target) : "Activités critiques du périmètre étudié";
 
   const scenario_uid = crypto.randomUUID();
   const label = `Scénario stratégique — ${sourceLabel}`;
   const narrative = (
     `Dans le contexte de l'analyse EBIOS RM, la source de risque « ${sourceLabel} » ` +
-    `poursuit l'objectif suivant : ${target}. ` +
+    `(motivation : ${motivation}) poursuit l'objectif suivant : ${target}. ` +
     `L'événement redouté est : ${feared}. ` +
     `Ce scénario stratégique décrit comment cette menace pourrait affecter ${assetsText}, ` +
     `avec des impacts significatifs pour ${stakeholdersText}. ` +
@@ -87,7 +126,10 @@ export function generateStrategicScenario(
     scenario_uid,
     label,
     risk_source_id: riskSource.id,
+    motivation,
     target_objective: target,
+    strategic_objective: target,
+    targeted_essential_asset: targetedEssentialAsset,
     feared_event: feared,
     narrative_description: narrative,
     stakeholder_ids: stakeholderIds,
@@ -101,10 +143,14 @@ export function generateStrategicScenario(
 
 export function scenarioFromRecord(record: EbiosRecord): StrategicScenarioFormData {
   const p = record.properties ?? {};
+  const target = String(p.target_objective ?? "");
   return {
     label: record.label,
     risk_source_id: String(p.risk_source_id ?? ""),
-    target_objective: String(p.target_objective ?? ""),
+    motivation: String(p.motivation ?? MOTIVATION_OPTIONS[0]),
+    target_objective: target,
+    strategic_objective: String(p.strategic_objective ?? target),
+    targeted_essential_asset: String(p.targeted_essential_asset ?? ""),
     feared_event: String(p.feared_event ?? ""),
     narrative_description: String(p.narrative_description ?? record.description ?? ""),
     stakeholder_ids: Array.isArray(p.stakeholder_ids) ? p.stakeholder_ids.map(String) : [],
@@ -117,6 +163,20 @@ export function scenarioFromRecord(record: EbiosRecord): StrategicScenarioFormDa
     workflow_status: String(p.workflow_status ?? WORKFLOW_PROPOSED),
     scenario_uid: p.scenario_uid ? String(p.scenario_uid) : undefined,
   };
+}
+
+export function scenarioJustification(record: EbiosRecord): string[] {
+  const value = record.properties?.justification;
+  return Array.isArray(value) ? value.map(String).filter((v) => v.trim() !== "") : [];
+}
+
+export type ScenarioConfidence = { score: number | null; label: string | null };
+
+export function scenarioConfidence(record: EbiosRecord): ScenarioConfidence {
+  const p = record.properties ?? {};
+  const score = typeof p.confidence_score === "number" ? p.confidence_score : null;
+  const label = typeof p.confidence_label === "string" ? p.confidence_label : null;
+  return { score, label };
 }
 
 export const STATUS_CLASS: Record<string, string> = {

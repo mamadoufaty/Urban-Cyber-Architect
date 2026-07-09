@@ -218,8 +218,22 @@ export function validateDecision(projectId: string, data: Record<string, unknown
   });
 }
 
-export function getUrbanismGraph(projectId: string, categories?: string[]) {
-  const qs = categories?.length ? `?categories=${categories.join(",")}` : "";
+function cartographyQuery(cartographyId?: string, versionId?: string, extra?: Record<string, string>) {
+  const params = new URLSearchParams(extra);
+  if (cartographyId) params.set("cartography_id", cartographyId);
+  if (versionId) params.set("version_id", versionId);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export function getUrbanismGraph(
+  projectId: string,
+  categories?: string[],
+  cartographyId?: string,
+  versionId?: string
+) {
+  const extra = categories?.length ? { categories: categories.join(",") } : undefined;
+  const qs = cartographyQuery(cartographyId, versionId, extra);
   return fetchJSON<UrbanismGraph>(`/projects/${projectId}/urbanism/graph${qs}`);
 }
 
@@ -237,9 +251,9 @@ export function getMetamodelValidation() {
   return fetchJSON<import("./components/urbanism/metamodel").MetamodelValidationReport>("/metamodel/validation");
 }
 
-export function listUrbanismEntities(projectId: string) {
+export function listUrbanismEntities(projectId: string, cartographyId?: string) {
   return fetchJSON<import("./components/urbanism/metamodel").UrbanismEntity[]>(
-    `/projects/${projectId}/urbanism/entities`
+    `/projects/${projectId}/urbanism/entities${cartographyQuery(cartographyId)}`
   );
 }
 
@@ -250,42 +264,50 @@ export function createUrbanismEntity(
     label: string;
     description?: string;
     relations?: Array<{ relation_type: string; target_id?: string; source_id?: string; criticite?: string }>;
-  }
+  },
+  cartographyId?: string
 ) {
-  return fetchJSON(`/projects/${projectId}/urbanism/entities`, {
+  return fetchJSON(`/projects/${projectId}/urbanism/entities${cartographyQuery(cartographyId)}`, {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
-export function deleteUrbanismEntity(projectId: string, entityId: string) {
-  return fetchJSON<void>(`/projects/${projectId}/urbanism/entities/${entityId}`, { method: "DELETE" });
-}
-
-export function listUrbanismRelations(projectId: string) {
-  return fetchJSON<import("./components/urbanism/metamodel").UrbanismRelation[]>(
-    `/projects/${projectId}/urbanism/relations`
+export function deleteUrbanismEntity(projectId: string, entityId: string, cartographyId?: string) {
+  return fetchJSON<void>(
+    `/projects/${projectId}/urbanism/entities/${entityId}${cartographyQuery(cartographyId)}`,
+    { method: "DELETE" }
   );
 }
 
-export function deleteUrbanismRelation(projectId: string, relationId: string) {
-  return fetchJSON<void>(`/projects/${projectId}/urbanism/relations/${relationId}`, { method: "DELETE" });
+export function listUrbanismRelations(projectId: string, cartographyId?: string) {
+  return fetchJSON<import("./components/urbanism/metamodel").UrbanismRelation[]>(
+    `/projects/${projectId}/urbanism/relations${cartographyQuery(cartographyId)}`
+  );
+}
+
+export function deleteUrbanismRelation(projectId: string, relationId: string, cartographyId?: string) {
+  return fetchJSON<void>(
+    `/projects/${projectId}/urbanism/relations/${relationId}${cartographyQuery(cartographyId)}`,
+    { method: "DELETE" }
+  );
 }
 
 export function saveEdgeLayout(
   projectId: string,
   edgeId: string,
-  layout: import("./components/urbanism/edgeLayoutTypes").EdgeLayoutOverride
+  layout: import("./components/urbanism/edgeLayoutTypes").EdgeLayoutOverride,
+  cartographyId?: string
 ) {
   return fetchJSON<{ edge_id: string; layout: import("./components/urbanism/edgeLayoutTypes").EdgeLayoutOverride }>(
-    `/projects/${projectId}/urbanism/edges/${encodeURIComponent(edgeId)}/layout`,
+    `/projects/${projectId}/urbanism/edges/${encodeURIComponent(edgeId)}/layout${cartographyQuery(cartographyId)}`,
     { method: "PUT", body: JSON.stringify({ layout }) }
   );
 }
 
-export function clearEdgeLayout(projectId: string, edgeId: string) {
+export function clearEdgeLayout(projectId: string, edgeId: string, cartographyId?: string) {
   return fetchJSON<void>(
-    `/projects/${projectId}/urbanism/edges/${encodeURIComponent(edgeId)}/layout`,
+    `/projects/${projectId}/urbanism/edges/${encodeURIComponent(edgeId)}/layout${cartographyQuery(cartographyId)}`,
     { method: "DELETE" }
   );
 }
@@ -293,65 +315,325 @@ export function clearEdgeLayout(projectId: string, edgeId: string) {
 export function saveEntityLayout(
   projectId: string,
   entityId: string,
-  layout: { x: number; y: number }
+  layout: { x: number; y: number },
+  cartographyId?: string
 ) {
   return fetchJSON<{ entity_id: string; layout: import("./components/urbanism/nodeLayoutTypes").NodeLayoutOverride }>(
-    `/projects/${projectId}/urbanism/entities/${entityId}/layout`,
+    `/projects/${projectId}/urbanism/entities/${entityId}/layout${cartographyQuery(cartographyId)}`,
     { method: "PUT", body: JSON.stringify({ layout }) }
   );
 }
 
 export function saveEntityLayoutsBulk(
   projectId: string,
-  layouts: Array<{ entity_id: string; layout: { x: number; y: number } }>
+  layouts: Array<{ entity_id: string; layout: { x: number; y: number } }>,
+  cartographyId?: string
 ) {
   return fetchJSON<{ layouts: Array<{ entity_id: string; layout: import("./components/urbanism/nodeLayoutTypes").NodeLayoutOverride }> }>(
-    `/projects/${projectId}/urbanism/entities/layout/bulk`,
+    `/projects/${projectId}/urbanism/entities/layout/bulk${cartographyQuery(cartographyId)}`,
     { method: "PUT", body: JSON.stringify({ layouts }) }
   );
 }
 
-export function clearEntityLayout(projectId: string, entityId: string) {
-  return fetchJSON<void>(`/projects/${projectId}/urbanism/entities/${entityId}/layout`, { method: "DELETE" });
+export function clearEntityLayout(projectId: string, entityId: string, cartographyId?: string) {
+  return fetchJSON<void>(
+    `/projects/${projectId}/urbanism/entities/${entityId}/layout${cartographyQuery(cartographyId)}`,
+    { method: "DELETE" }
+  );
 }
 
-export function getAssistantFormSchema(projectId: string, entityType: string) {
+export function getAssistantFormSchema(projectId: string, entityType: string, cartographyId?: string) {
+  const qs = cartographyQuery(cartographyId, undefined, { entity_type: entityType });
   return fetchJSON<import("./components/urbanism/metamodel").AssistedFormSchema>(
-    `/projects/${projectId}/urbanism/assistant/form-schema?entity_type=${encodeURIComponent(entityType)}`
+    `/projects/${projectId}/urbanism/assistant/form-schema${qs}`
   );
 }
 
 export function assistantCreate(
   projectId: string,
-  data: { entity_type: string; label: string; bindings: Record<string, string[]> }
+  data: { entity_type: string; label: string; bindings: Record<string, string[]> },
+  cartographyId?: string
 ) {
   return fetchJSON<import("./components/urbanism/metamodel").AssistedCreateResponse>(
-    `/projects/${projectId}/urbanism/assistant/create`,
+    `/projects/${projectId}/urbanism/assistant/create${cartographyQuery(cartographyId)}`,
     { method: "POST", body: JSON.stringify(data) }
   );
 }
 
 export function assistantLink(
   projectId: string,
-  data: { action: "add" | "remove" | "replace"; rule_id: string; source_id: string; target_id: string }
+  data: { action: "add" | "remove" | "replace"; rule_id: string; source_id: string; target_id: string },
+  cartographyId?: string
 ) {
   return fetchJSON<import("./components/urbanism/metamodel").AssistedLinkResponse>(
-    `/projects/${projectId}/urbanism/assistant/link`,
+    `/projects/${projectId}/urbanism/assistant/link${cartographyQuery(cartographyId)}`,
     { method: "POST", body: JSON.stringify(data) }
   );
 }
 
-export function getUrbanismProgress(projectId: string) {
+export function getUrbanismProgress(projectId: string, cartographyId?: string) {
   return fetchJSON<import("./components/urbanism/metamodel").UrbanismProgress>(
-    `/projects/${projectId}/urbanism/progress`
+    `/projects/${projectId}/urbanism/progress${cartographyQuery(cartographyId)}`
   );
 }
 
-export function deduplicateUrbanism(projectId: string) {
+export function deduplicateUrbanism(projectId: string, cartographyId?: string) {
   return fetchJSON<import("./components/urbanism/metamodel").DeduplicateResponse>(
-    `/projects/${projectId}/urbanism/deduplicate`,
+    `/projects/${projectId}/urbanism/deduplicate${cartographyQuery(cartographyId)}`,
     { method: "POST" }
   );
+}
+
+export interface UrbanismImportPreview {
+  counts: Record<string, number>;
+  issues: Array<{
+    code: string;
+    message: string;
+    sheet?: string | null;
+    row?: number | null;
+    field?: string | null;
+    severity: string;
+  }>;
+  sample_rows: Array<Record<string, unknown>>;
+  mode: "replace" | "merge";
+  can_import: boolean;
+}
+
+export interface UrbanismImportReport {
+  created: Record<string, number>;
+  updated: Record<string, number>;
+  relations_created: number;
+  orphans: number;
+  inconsistencies: number;
+  completeness_rate: number;
+  urbanism_progress: Record<string, unknown>;
+  flux_stored: number;
+  issues: UrbanismImportPreview["issues"];
+}
+
+const API_BASE = "/api";
+
+export async function downloadUrbanismImportTemplate(): Promise<void> {
+  const res = await fetch(`${API_BASE}/urbanism/import/template`);
+  if (!res.ok) throw new Error("Téléchargement du modèle impossible");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "UCA_Modele_Cartographie_Urbanisme_V1.4.xlsx";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Builds the backend URL for the urbanism import endpoints.
+ *
+ * The "preview" step targets `/urbanism/import/preview`, while the final
+ * "import" step targets `/urbanism/import` directly (NOT `/urbanism/import/import`).
+ * Exported for unit testing.
+ */
+export function buildUrbanismImportUrl(
+  projectId: string,
+  endpoint: "preview" | "import",
+  cartographyId?: string
+): string {
+  const path =
+    endpoint === "import"
+      ? `/projects/${projectId}/urbanism/import`
+      : `/projects/${projectId}/urbanism/import/${endpoint}`;
+  const qs = endpoint === "import" ? cartographyQuery(cartographyId) : "";
+  return `${API_BASE}${path}${qs}`;
+}
+
+async function uploadUrbanismImport(
+  projectId: string,
+  file: File,
+  mode: "replace" | "merge",
+  endpoint: "preview" | "import",
+  force = false,
+  cartographyId?: string
+): Promise<UrbanismImportPreview | UrbanismImportReport> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("mode", mode);
+  if (endpoint === "import") form.append("force", force ? "true" : "false");
+  const res = await fetch(buildUrbanismImportUrl(projectId, endpoint, cartographyId), {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export function previewUrbanismImport(projectId: string, file: File, mode: "replace" | "merge") {
+  return uploadUrbanismImport(projectId, file, mode, "preview") as Promise<UrbanismImportPreview>;
+}
+
+export function executeUrbanismImport(
+  projectId: string,
+  file: File,
+  mode: "replace" | "merge",
+  force = false,
+  cartographyId?: string
+) {
+  return uploadUrbanismImport(projectId, file, mode, "import", force, cartographyId) as Promise<UrbanismImportReport>;
+}
+
+// ————————————————————————————————————————————————————————————————
+// Cartographies — plusieurs cartographies indépendantes par projet + versionning
+// ————————————————————————————————————————————————————————————————
+
+export const CARTOGRAPHY_TYPES: Array<{ id: string; label: string }> = [
+  { id: "urbanisme_si", label: "Urbanisme SI" },
+  { id: "urbanisme_metier", label: "Urbanisme Métier" },
+  { id: "urbanisme_fonctionnel", label: "Urbanisme Fonctionnel" },
+  { id: "urbanisme_applicatif", label: "Urbanisme Applicatif" },
+  { id: "urbanisme_technique", label: "Urbanisme Technique" },
+  { id: "cybersecurite", label: "Cybersécurité" },
+  { id: "architecture_actuelle", label: "Architecture actuelle" },
+  { id: "architecture_cible", label: "Architecture cible" },
+  { id: "reseau", label: "Réseau" },
+  { id: "cloud", label: "Cloud" },
+  { id: "libre", label: "Libre" },
+];
+
+export type CartographyStatus = "draft" | "in_validation" | "validated" | "archived";
+
+export interface Cartography {
+  id: string;
+  project_id: string;
+  name: string;
+  description: string | null;
+  type: string;
+  status: CartographyStatus;
+  version: string;
+  author: string | null;
+  is_active: boolean;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+  validated_at: string | null;
+  validated_by: string | null;
+}
+
+export interface CartographyVersion {
+  id: string;
+  cartography_id: string;
+  version: string;
+  status: CartographyStatus;
+  is_current: boolean;
+  author: string | null;
+  comment: string | null;
+  created_at: string;
+  validated_at: string | null;
+  validated_by: string | null;
+}
+
+export interface CartographyHistoryEntry {
+  id: string;
+  cartography_id: string;
+  version_id: string | null;
+  version: string;
+  author: string | null;
+  action: string;
+  comment: string | null;
+  created_at: string;
+}
+
+export function listCartographies(projectId: string) {
+  return fetchJSON<{ total: number; items: Cartography[] }>(`/projects/${projectId}/cartographies`);
+}
+
+export function createCartography(
+  projectId: string,
+  data: { name: string; type: string; description?: string | null; author?: string | null }
+) {
+  return fetchJSON<Cartography>(`/projects/${projectId}/cartographies`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function getCartography(cartographyId: string) {
+  return fetchJSON<Cartography>(`/cartographies/${cartographyId}`);
+}
+
+export function updateCartography(
+  cartographyId: string,
+  data: { name?: string; description?: string | null; type?: string }
+) {
+  return fetchJSON<Cartography>(`/cartographies/${cartographyId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteCartography(cartographyId: string) {
+  return fetchJSON<void>(`/cartographies/${cartographyId}`, { method: "DELETE" });
+}
+
+export function activateCartography(cartographyId: string) {
+  return fetchJSON<Cartography>(`/cartographies/${cartographyId}/activate`, { method: "POST" });
+}
+
+export function duplicateCartography(cartographyId: string, name: string, author?: string | null) {
+  return fetchJSON<Cartography>(`/cartographies/${cartographyId}/duplicate`, {
+    method: "POST",
+    body: JSON.stringify({ name, author }),
+  });
+}
+
+export function createNewCartographyVersion(cartographyId: string, author?: string | null, comment?: string) {
+  const params = new URLSearchParams();
+  if (author) params.set("author", author);
+  if (comment) params.set("comment", comment);
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  return fetchJSON<Cartography>(`/cartographies/${cartographyId}/new-version${qs}`, { method: "POST" });
+}
+
+export function submitCartographyForValidation(cartographyId: string, author?: string | null) {
+  const qs = author ? `?author=${encodeURIComponent(author)}` : "";
+  return fetchJSON<Cartography>(`/cartographies/${cartographyId}/submit-for-validation${qs}`, {
+    method: "POST",
+  });
+}
+
+export function validateCartography(
+  cartographyId: string,
+  data: { validated_by?: string | null; comment?: string | null }
+) {
+  return fetchJSON<Cartography>(`/cartographies/${cartographyId}/validate`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function archiveCartography(cartographyId: string, author?: string | null) {
+  const qs = author ? `?author=${encodeURIComponent(author)}` : "";
+  return fetchJSON<Cartography>(`/cartographies/${cartographyId}/archive${qs}`, { method: "POST" });
+}
+
+export function unarchiveCartography(cartographyId: string, author?: string | null) {
+  const qs = author ? `?author=${encodeURIComponent(author)}` : "";
+  return fetchJSON<Cartography>(`/cartographies/${cartographyId}/unarchive${qs}`, { method: "POST" });
+}
+
+export function listCartographyVersions(cartographyId: string) {
+  return fetchJSON<{ items: CartographyVersion[] }>(`/cartographies/${cartographyId}/versions`);
+}
+
+export function restoreCartographyVersion(cartographyId: string, versionId: string, author?: string | null) {
+  return fetchJSON<Cartography>(`/cartographies/${cartographyId}/restore`, {
+    method: "POST",
+    body: JSON.stringify({ version_id: versionId, author }),
+  });
+}
+
+export function getCartographyHistory(cartographyId: string) {
+  return fetchJSON<{ items: CartographyHistoryEntry[] }>(`/cartographies/${cartographyId}/history`);
 }
 
 export function getGraph(projectId: string) {
@@ -368,9 +650,33 @@ export function getEbiosExtensions() {
   return fetchJSON<import("./components/ebios/types").EbiosExtensionRegistry>("/ebios/extensions");
 }
 
-export function getEbiosAssessment(projectId: string) {
+/**
+ * Résout l'étude EBIOS d'une cartographie donnée (par défaut la cartographie
+ * active du projet). Chaque cartographie possède sa propre étude, jamais
+ * partagée avec une autre : passer un `cartographyId` différent garantit de
+ * ne jamais afficher la progression ou les données d'une étude précédente.
+ */
+export function getEbiosAssessment(projectId: string, cartographyId?: string | null) {
+  const qs = cartographyId ? `?cartography_id=${cartographyId}` : "";
   return fetchJSON<import("./components/ebios/types").EbiosAssessment>(
-    `/projects/${projectId}/ebios/assessment`
+    `/projects/${projectId}/ebios/assessment${qs}`
+  );
+}
+
+export function listEbiosAssessments(projectId: string, cartographyId?: string | null) {
+  const qs = cartographyId ? `?cartography_id=${cartographyId}` : "";
+  return fetchJSON<import("./components/ebios/types").EbiosAssessment[]>(
+    `/projects/${projectId}/ebios/assessments${qs}`
+  );
+}
+
+export function createEbiosAssessment(
+  projectId: string,
+  data: { title: string; description?: string | null; cartography_id?: string | null }
+) {
+  return fetchJSON<import("./components/ebios/types").EbiosAssessment>(
+    `/projects/${projectId}/ebios/assessments`,
+    { method: "POST", body: JSON.stringify(data) }
   );
 }
 
@@ -435,9 +741,39 @@ export function deleteEbiosRecord(projectId: string, assessmentId: string, recor
   );
 }
 
+export function generateEbiosWorkshop1FromCartography(
+  projectId: string,
+  assessmentId: string,
+  regenerate = false
+) {
+  const qs = regenerate ? "?regenerate=true" : "";
+  return fetchJSON<{
+    generated_count: number;
+    records: import("./components/ebios/types").EbiosRecord[];
+  }>(
+    `/projects/${projectId}/ebios/assessments/${assessmentId}/workshop1/generate-from-cartography${qs}`,
+    { method: "POST" }
+  );
+}
+
 export function importEbiosUrbanismAssets(projectId: string, assessmentId: string) {
   return fetchJSON<{ imported_count: number; records: import("./components/ebios/types").EbiosRecord[] }>(
     `/projects/${projectId}/ebios/assessments/${assessmentId}/workshop2/import-urbanism-assets`,
+    { method: "POST" }
+  );
+}
+
+export function generateEbiosWorkshop2RiskSources(
+  projectId: string,
+  assessmentId: string,
+  regenerate = false
+) {
+  const qs = regenerate ? "?regenerate=true" : "";
+  return fetchJSON<{
+    generated_count: number;
+    records: import("./components/ebios/types").EbiosRecord[];
+  }>(
+    `/projects/${projectId}/ebios/assessments/${assessmentId}/workshop2/generate-risk-sources${qs}`,
     { method: "POST" }
   );
 }
@@ -568,6 +904,32 @@ export function deleteEbiosRiskEvaluation(
   return fetchJSON<void>(
     `/projects/${projectId}/ebios/assessments/${assessmentId}/workshop5/evaluations/${evaluationId}`,
     { method: "DELETE" }
+  );
+}
+
+// ——— Livrables EBIOS RM (lecture seule) ———
+
+export type EbiosDeliverableKind =
+  | "report"
+  | "risk-register"
+  | "treatment-plan"
+  | "executive-summary";
+
+const EBios_DELIVERABLE_PATHS: Record<EbiosDeliverableKind, string> = {
+  report: "report",
+  "risk-register": "risk-register",
+  "treatment-plan": "treatment-plan",
+  "executive-summary": "executive-summary",
+};
+
+export function getEbiosDeliverable(
+  projectId: string,
+  assessmentId: string,
+  kind: EbiosDeliverableKind
+) {
+  const path = EBios_DELIVERABLE_PATHS[kind];
+  return fetchJSON<import("./components/ebios/deliverables/types").EbiosDeliverableResponse>(
+    `/projects/${projectId}/ebios/assessments/${assessmentId}/deliverables/${path}`
   );
 }
 
@@ -1164,6 +1526,77 @@ export function activateAdminOrganization(organizationId: string) {
 
 export function deactivateAdminOrganization(organizationId: string) {
   return fetchJSON<AdminOrganization>(`/admin/organizations/${organizationId}/deactivate`, {
+    method: "PATCH",
+  });
+}
+
+// ——— Référentiels de conformité ———
+
+export interface Referential {
+  id: string;
+  code: string;
+  label: string;
+  category: string | null;
+  description: string | null;
+  status: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReferentialsListResponse {
+  total: number;
+  items: Referential[];
+}
+
+export type ReferentialCreatePayload = {
+  label: string;
+  code?: string;
+  category?: string;
+  description?: string;
+  status?: string;
+  sort_order?: number;
+};
+
+export type ReferentialUpdatePayload = {
+  label?: string;
+  category?: string;
+  description?: string;
+  status?: string;
+  sort_order?: number;
+};
+
+export function listReferentials(activeOnly = false) {
+  const qs = activeOnly ? "?active_only=true" : "";
+  return fetchJSON<ReferentialsListResponse>(`/admin/referentials${qs}`);
+}
+
+export function createReferential(payload: ReferentialCreatePayload) {
+  return fetchJSON<Referential>("/admin/referentials", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateReferential(referentialId: string, payload: ReferentialUpdatePayload) {
+  return fetchJSON<Referential>(`/admin/referentials/${referentialId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteReferential(referentialId: string) {
+  return fetchJSON<void>(`/admin/referentials/${referentialId}`, { method: "DELETE" });
+}
+
+export function activateReferential(referentialId: string) {
+  return fetchJSON<Referential>(`/admin/referentials/${referentialId}/activate`, {
+    method: "PATCH",
+  });
+}
+
+export function deactivateReferential(referentialId: string) {
+  return fetchJSON<Referential>(`/admin/referentials/${referentialId}/deactivate`, {
     method: "PATCH",
   });
 }

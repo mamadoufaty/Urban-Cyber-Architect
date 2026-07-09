@@ -3,6 +3,7 @@ export interface AuthUser {
   username: string;
   displayName: string;
   role: import("./permissions").UserRole;
+  organizationId: string | null;
 }
 
 export interface AuthSession {

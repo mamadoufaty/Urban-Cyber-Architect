@@ -1,9 +1,12 @@
-import type { Project } from "../../api";
+import type { Cartography, Project } from "../../api";
 
 type Props = {
   projects: Project[];
   selectedProjectId: string;
   onProjectChange: (id: string) => void;
+  cartographies: Cartography[];
+  selectedCartographyId: string | null;
+  onCartographyChange: (id: string) => void;
   assessmentTitle: string;
   overallProgress: number;
 };
@@ -12,6 +15,9 @@ export default function EbiosRibbon({
   projects,
   selectedProjectId,
   onProjectChange,
+  cartographies,
+  selectedCartographyId,
+  onCartographyChange,
   assessmentTitle,
   overallProgress,
 }: Props) {
@@ -27,6 +33,22 @@ export default function EbiosRibbon({
           >
             {projects.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="eb-ribbon-project">
+          <span>Cartographie</span>
+          <select
+            className="eb-select"
+            value={selectedCartographyId ?? ""}
+            onChange={(e) => onCartographyChange(e.target.value)}
+            disabled={!cartographies.length}
+          >
+            {cartographies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {c.is_archived ? " (archivée)" : ""}
+              </option>
             ))}
           </select>
         </label>

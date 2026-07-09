@@ -7,15 +7,26 @@ import {
   baselineFromRecord,
   type BaselineFormData,
 } from "./constants";
+import ProposalActions, { proposalStatusClass, proposalStatusLabel } from "./ProposalStatus";
 import RecordFormModal, { FormField, FormInput, FormSelect, FormTextarea } from "./RecordFormModal";
 
 type Props = {
   records: EbiosRecord[];
   onSave: (data: BaselineFormData, existingId?: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onValidate: (id: string) => Promise<void>;
+  onReject: (id: string) => Promise<void>;
+  onRestore: (id: string) => Promise<void>;
 };
 
-export default function BaselineCard({ records, onSave, onDelete }: Props) {
+export default function BaselineCard({
+  records,
+  onSave,
+  onDelete,
+  onValidate,
+  onReject,
+  onRestore,
+}: Props) {
   const items = records.filter((r) => r.record_type === "security_baseline");
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -70,6 +81,11 @@ export default function BaselineCard({ records, onSave, onDelete }: Props) {
             <li key={item.id}>
               <div className="eb-card-item-main">
                 <strong>{item.label}</strong>
+                {proposalStatusLabel(item.status) && (
+                  <span className={`eb-status-badge ${proposalStatusClass(item.status)}`}>
+                    {proposalStatusLabel(item.status)}
+                  </span>
+                )}
                 {item.description && <p>{item.description}</p>}
                 <div className="eb-card-meta">
                   {item.properties.domain ? <span>{String(item.properties.domain)}</span> : null}
@@ -80,6 +96,12 @@ export default function BaselineCard({ records, onSave, onDelete }: Props) {
                 </div>
               </div>
               <div className="eb-card-item-actions">
+                <ProposalActions
+                  status={item.status}
+                  onValidate={() => onValidate(item.id)}
+                  onReject={() => onReject(item.id)}
+                  onRestore={() => onRestore(item.id)}
+                />
                 <button type="button" className="eb-btn eb-btn-ghost" onClick={() => openEdit(item)}>
                   Modifier
                 </button>

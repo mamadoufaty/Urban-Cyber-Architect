@@ -16,6 +16,12 @@ LINK_IMPACTS_ASSET = "impacts_asset"
 LINK_EXPRESSES_FEAR = "expresses_fear"
 SECTION_WEIGHT = 25
 
+# Une source de risque proposée automatiquement (ou rejetée) ne compte jamais
+# comme acquise : l'utilisateur doit explicitement la Valider pour qu'elle
+# participe à la progression de l'atelier — aucune proposition n'est jamais
+# validée d'office (méthodologie EBIOS RM, §Contraintes).
+_EXCLUDED_FROM_PROGRESS = {"proposed", "rejected"}
+
 
 def _props(record) -> dict:
     return record.properties or {}
@@ -23,6 +29,8 @@ def _props(record) -> dict:
 
 def is_risk_source_complete(record) -> bool:
     if record.record_type != "risk_source":
+        return False
+    if getattr(record, "status", None) in _EXCLUDED_FROM_PROGRESS:
         return False
     props = _props(record)
     if not record.label.strip():
@@ -163,6 +171,97 @@ async def cleanup_risk_source_graph(db: AsyncSession, assessment_id: UUID, risk_
     )
     if feared:
         await db.delete(feared)
+
+
+async def generate_workshop2_risk_sources(
+    db: AsyncSession, assessment_id: UUID, project_id: UUID, *, regenerate: bool = False
+) -> list[EbiosRecord]:
+    """Analyse l'Atelier 1 validé, la cartographie active et les biens supports
+    déjà synchronisés pour proposer un jeu de sources de risque EBIOS RM —
+    toujours à l'état ``proposed`` (jamais validé d'office).
+
+    Idempotent par défaut (``regenerate=False``) : ne recrée jamais une source
+    de risque déjà présente (même libellé). Avec ``regenerate=True``, les
+    propositions non encore validées sont remplacées (les sources déjà
+    validées ou modifiées manuellement ne sont jamais touchées).
+    """
+    from app.services import cartography_service
+    from app.services.ebios.risk_source_generator import (
+        SOURCE_CARTOGRAPHY,
+        build_risk_source_proposals,
+    )
+    from app.services.ebios.urbanism_actor_resolver import load_urbanism_graph
+
+    entities, _relations = await load_urbanism_graph(db, project_id)
+    if not entities:
+        return []
+
+    try:
+        cartography, version = await cartography_service.resolve_read_version(db, project_id)
+        cartography_id, cartography_version_id = cartography.id, version.id
+    except cartography_service.CartographyError:
+        cartography_id, cartography_version_id = None, None
+
+    workshop1_records = await list_records(db, assessment_id, workshop_number=1)
+    workshop1_usable = [r for r in workshop1_records if r.status not in _EXCLUDED_FROM_PROGRESS]
+    stakeholders = [r for r in workshop1_usable if r.record_type == "stakeholder"]
+    scope_record = next(
+        (r for r in workshop1_usable if r.record_type == "security_scope"), None
+    )
+
+    existing = await list_records(db, assessment_id, workshop_number=2)
+    supporting_assets = [r for r in existing if r.record_type == "supporting_asset"]
+    existing_risk_sources = [r for r in existing if r.record_type == "risk_source"]
+
+    def _is_cartography_generated(record: EbiosRecord) -> bool:
+        return _props(record).get("generated_from", {}).get("source") == SOURCE_CARTOGRAPHY
+
+    if regenerate:
+        for record in existing_risk_sources:
+            if record.status == "proposed" and _is_cartography_generated(record):
+                await cleanup_risk_source_graph(db, assessment_id, record.id)
+                await db.delete(record)
+        await db.flush()
+        existing_risk_sources = [
+            r
+            for r in existing_risk_sources
+            if not (r.status == "proposed" and _is_cartography_generated(r))
+        ]
+
+    existing_labels = {(r.label or "").strip().lower() for r in existing_risk_sources}
+
+    proposals = build_risk_source_proposals(
+        entities,
+        scope_record,
+        stakeholders,
+        supporting_assets,
+        cartography_id,
+        cartography_version_id,
+    )
+
+    created: list[EbiosRecord] = []
+    for proposal in proposals:
+        if proposal["label"].strip().lower() in existing_labels:
+            continue
+        record = EbiosRecord(
+            assessment_id=assessment_id,
+            workshop_number=2,
+            record_type="risk_source",
+            label=proposal["label"],
+            description=proposal.get("description"),
+            properties=proposal["properties"],
+            status="proposed",
+        )
+        db.add(record)
+        await db.flush()
+        await sync_risk_source_graph(db, record)
+        created.append(record)
+
+    if created:
+        await db.commit()
+        for record in created:
+            await db.refresh(record)
+    return created
 
 
 async def recalculate_workshop2_progress(db: AsyncSession, assessment_id: UUID) -> int:

@@ -48,5 +48,6 @@ async def login(db: AsyncSession, username: str, password: str) -> LoginResponse
             username=user.username,
             displayName=_display_name(user),
             role=role_code,
+            organizationId=str(user.organization_id) if user.organization_id else None,
         )
     )

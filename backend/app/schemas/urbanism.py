@@ -176,3 +176,23 @@ class AssistedLinkResponse(BaseModel):
     relation: UrbanismRelationResponse | None = None
     analysis: dict[str, Any]
 
+
+class UrbanismImportPreviewResponse(BaseModel):
+    counts: dict[str, int]
+    issues: list[dict[str, Any]]
+    sample_rows: list[dict[str, Any]]
+    mode: Literal["replace", "merge"]
+    can_import: bool
+
+
+class UrbanismImportReportResponse(BaseModel):
+    created: dict[str, int]
+    updated: dict[str, int]
+    relations_created: int
+    orphans: int
+    inconsistencies: int
+    completeness_rate: float
+    urbanism_progress: dict[str, Any]
+    flux_stored: int
+    issues: list[dict[str, Any]]
+

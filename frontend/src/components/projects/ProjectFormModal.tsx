@@ -1,12 +1,28 @@
-import { useEffect, useState } from "react";
-import type { AdminOrganization, AdminUser, Project, ProjectTemplate } from "../../api";
+import { useEffect, useMemo, useState } from "react";
 import {
-  PROJECT_PRIORITY_OPTIONS,
-  PROJECT_STATUS_OPTIONS,
-  REFERENTIAL_OPTIONS,
-} from "../../projects/constants";
+  createAdminOrganization,
+  createReferential,
+  type AdminOrganization,
+  type AdminUser,
+  type Project,
+  type ProjectTemplate,
+  type Referential,
+} from "../../api";
+import { PROJECT_PRIORITY_OPTIONS, PROJECT_STATUS_OPTIONS } from "../../projects/constants";
 import type { ProjectCreatePayload } from "../../api";
 import { parseTagsInput, tagsToInput, toDateInputValue, validateProjectDateRange } from "../../projects/format";
+import { activeOrganizations, upsertOrganization } from "../../projects/organizationSelect";
+import {
+  upsertReferential,
+  withReferentialPreselected,
+  type QuickAddReferentialValues,
+} from "../../projects/referentialSelect";
+import OrganizationFormModal, {
+  type OrganizationFormValues,
+} from "../admin/OrganizationFormModal";
+import DatePicker from "./DatePicker";
+import OrganizationCombobox from "./OrganizationCombobox";
+import QuickAddReferentialModal from "./QuickAddReferentialModal";
 
 export type ProjectFormValues = {
   name: string;
@@ -34,17 +50,34 @@ type Props = {
   organizations: AdminOrganization[];
   users: AdminUser[];
   templates: ProjectTemplate[];
+  referentials: Referential[];
+  /** L'utilisateur peut-il changer l'organisation (Administrateur / SuperAdmin) ? */
+  canChangeOrganization?: boolean;
+  /** Organisation à présélectionner en création (celle de l'utilisateur). */
+  defaultOrganizationId?: string | null;
+  /** Notifie le parent d'une organisation créée depuis le formulaire. */
+  onOrganizationCreated?: (organization: AdminOrganization) => void;
+  /** L'utilisateur peut-il créer un référentiel depuis ce formulaire (Administrateur / SuperAdmin) ? */
+  canManageReferentials?: boolean;
+  /** Notifie le parent d'un référentiel créé depuis le formulaire. */
+  onReferentialCreated?: (referential: Referential) => void;
   onClose: () => void;
   onSubmit: (values: ProjectFormValues) => void;
 };
 
-function defaultValues(initial?: Project | null): ProjectFormValues {
+function defaultValues(
+  initial: Project | null | undefined,
+  mode: "create" | "edit",
+  defaultOrganizationId?: string | null,
+): ProjectFormValues {
+  const organizationId =
+    initial?.organization_id ?? (mode === "create" ? defaultOrganizationId ?? "" : "");
   return {
     name: initial?.name ?? "",
     code: initial?.code ?? "",
     description: initial?.description ?? "",
     client: initial?.client ?? "",
-    organization_id: initial?.organization_id ?? "",
+    organization_id: organizationId ?? "",
     status: initial?.status ?? "draft",
     priority: initial?.priority ?? "medium",
     start_date: toDateInputValue(initial?.start_date),
@@ -71,19 +104,48 @@ export default function ProjectFormModal({
   organizations,
   users,
   templates,
+  referentials,
+  canChangeOrganization = true,
+  defaultOrganizationId,
+  onOrganizationCreated,
+  canManageReferentials = false,
+  onReferentialCreated,
   onClose,
   onSubmit,
 }: Props) {
-  const [values, setValues] = useState<ProjectFormValues>(() => defaultValues(initial));
+  const [values, setValues] = useState<ProjectFormValues>(() =>
+    defaultValues(initial, mode, defaultOrganizationId),
+  );
   const [dateError, setDateError] = useState<string | null>(null);
+  const [orgs, setOrgs] = useState<AdminOrganization[]>(organizations);
+  const [orgModalOpen, setOrgModalOpen] = useState(false);
+  const [orgSaving, setOrgSaving] = useState(false);
+  const [orgError, setOrgError] = useState<string | null>(null);
+  const [refs, setRefs] = useState<Referential[]>(referentials);
+  const [refModalOpen, setRefModalOpen] = useState(false);
+  const [refSaving, setRefSaving] = useState(false);
+  const [refError, setRefError] = useState<string | null>(null);
   const exampleTemplates = templates.filter((t) => t.is_example);
+
+  const availableOrganizations = useMemo(() => {
+    // Toujours actives + trie, mais on conserve l'organisation déjà rattachée
+    // (édition) même si elle a été désactivée depuis.
+    const active = activeOrganizations(orgs);
+    const current = orgs.find((o) => o.id === values.organization_id);
+    if (current && !active.some((o) => o.id === current.id)) {
+      return upsertOrganization(active, current);
+    }
+    return active;
+  }, [orgs, values.organization_id]);
 
   useEffect(() => {
     if (open) {
-      setValues(defaultValues(initial));
+      setValues(defaultValues(initial, mode, defaultOrganizationId));
       setDateError(null);
+      setOrgs(organizations);
+      setRefs(referentials);
     }
-  }, [open, initial]);
+  }, [open, initial, mode, defaultOrganizationId, organizations, referentials]);
 
   if (!open) return null;
 
@@ -100,6 +162,66 @@ export default function ProjectFormModal({
     }));
   }
 
+  async function handleCreateOrganization(formValues: OrganizationFormValues) {
+    setOrgSaving(true);
+    setOrgError(null);
+    try {
+      const created = await createAdminOrganization({
+        name: formValues.name.trim(),
+        code: formValues.code.trim(),
+        description: formValues.description || undefined,
+        status: formValues.status,
+      });
+      setOrgs((prev) => upsertOrganization(prev, created));
+      update("organization_id", created.id);
+      onOrganizationCreated?.(created);
+      setOrgModalOpen(false);
+    } catch (e) {
+      let message = "Création de l'organisation impossible.";
+      if (e instanceof Error) {
+        try {
+          const parsed = JSON.parse(e.message) as { detail?: string };
+          message = parsed.detail ?? e.message;
+        } catch {
+          message = e.message;
+        }
+      }
+      setOrgError(message);
+    } finally {
+      setOrgSaving(false);
+    }
+  }
+
+  async function handleCreateReferential(formValues: QuickAddReferentialValues) {
+    setRefSaving(true);
+    setRefError(null);
+    try {
+      const created = await createReferential({
+        label: formValues.label.trim(),
+        code: formValues.code.trim(),
+        description: formValues.description.trim() || undefined,
+        status: formValues.status,
+      });
+      setRefs((prev) => upsertReferential(prev, created));
+      update("referentials", withReferentialPreselected(values.referentials, created.label));
+      onReferentialCreated?.(created);
+      setRefModalOpen(false);
+    } catch (e) {
+      let message = "Création du référentiel impossible.";
+      if (e instanceof Error) {
+        try {
+          const parsed = JSON.parse(e.message) as { detail?: string };
+          message = parsed.detail ?? e.message;
+        } catch {
+          message = e.message;
+        }
+      }
+      setRefError(message);
+    } finally {
+      setRefSaving(false);
+    }
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!values.name.trim()) return;
@@ -114,7 +236,8 @@ export default function ProjectFormModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <>
+      <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card modal-card-wide project-form-modal" onClick={(e) => e.stopPropagation()}>
         <h3>{mode === "create" ? "Nouveau projet" : "Modifier le projet"}</h3>
         {error && (
@@ -212,18 +335,23 @@ export default function ProjectFormModal({
             </div>
             <div className="form-group">
               <label htmlFor="pf-org">Organisation</label>
-              <select
+              <OrganizationCombobox
                 id="pf-org"
+                organizations={availableOrganizations}
                 value={values.organization_id}
-                onChange={(e) => update("organization_id", e.target.value)}
-              >
-                <option value="">— Non renseigné —</option>
-                {organizations.map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(orgId) => update("organization_id", orgId)}
+                onCreateNew={canChangeOrganization ? () => {
+                  setOrgError(null);
+                  setOrgModalOpen(true);
+                } : undefined}
+                disabled={!canChangeOrganization}
+                allowClear={canChangeOrganization}
+              />
+              {!canChangeOrganization && (
+                <span className="field-hint">
+                  Organisation rattachée à votre compte. Seul un administrateur peut la modifier.
+                </span>
+              )}
             </div>
             <div className="form-group">
               <label htmlFor="pf-status">Statut</label>
@@ -255,25 +383,25 @@ export default function ProjectFormModal({
             </div>
             <div className="form-group">
               <label htmlFor="pf-start">Date début</label>
-              <input
+              <DatePicker
                 id="pf-start"
-                type="date"
                 value={values.start_date}
-                onChange={(e) => {
-                  update("start_date", e.target.value);
+                ariaLabel="Date de début"
+                onChange={(iso) => {
+                  update("start_date", iso);
                   setDateError(null);
                 }}
               />
             </div>
             <div className="form-group">
               <label htmlFor="pf-end">Date fin</label>
-              <input
+              <DatePicker
                 id="pf-end"
-                type="date"
                 value={values.end_date}
+                ariaLabel="Date de fin"
                 min={values.start_date || undefined}
-                onChange={(e) => {
-                  update("end_date", e.target.value);
+                onChange={(iso) => {
+                  update("end_date", iso);
                   setDateError(null);
                 }}
               />
@@ -302,19 +430,55 @@ export default function ProjectFormModal({
               />
             </div>
             <div className="form-group project-form-full">
-              <label>Référentiels</label>
-              <div className="referential-checkboxes">
-                {REFERENTIAL_OPTIONS.map((ref) => (
-                  <label key={ref} className="referential-chip">
-                    <input
-                      type="checkbox"
-                      checked={values.referentials.includes(ref)}
-                      onChange={() => toggleReferential(ref)}
-                    />
-                    {ref}
-                  </label>
-                ))}
+              <div className="referentials-header">
+                <label>Référentiels</label>
+                {canManageReferentials && (
+                  <button
+                    type="button"
+                    className="btn btn-link referential-add-btn"
+                    onClick={() => {
+                      setRefError(null);
+                      setRefModalOpen(true);
+                    }}
+                  >
+                    + Ajouter un référentiel
+                  </button>
+                )}
               </div>
+              {refs.length === 0 ? (
+                <p className="field-hint">
+                  Aucun référentiel disponible.
+                  {canManageReferentials
+                    ? " Utilisez le bouton ci-dessus pour en créer un."
+                    : " Un administrateur peut en ajouter depuis « Administration › Référentiels »."}
+                </p>
+              ) : (
+                <div className="referential-checkboxes">
+                  {refs.map((ref) => (
+                    <label key={ref.id} className="referential-chip">
+                      <input
+                        type="checkbox"
+                        checked={values.referentials.includes(ref.label)}
+                        onChange={() => toggleReferential(ref.label)}
+                      />
+                      {ref.label}
+                    </label>
+                  ))}
+                  {/* Référentiels déjà rattachés mais désormais absents du catalogue. */}
+                  {values.referentials
+                    .filter((label) => !refs.some((r) => r.label === label))
+                    .map((label) => (
+                      <label key={label} className="referential-chip">
+                        <input
+                          type="checkbox"
+                          checked
+                          onChange={() => toggleReferential(label)}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -328,7 +492,27 @@ export default function ProjectFormModal({
           </div>
         </form>
       </div>
-    </div>
+      </div>
+
+      <OrganizationFormModal
+        open={orgModalOpen}
+        mode="create"
+        organization={null}
+        saving={orgSaving}
+        error={orgError}
+        onClose={() => setOrgModalOpen(false)}
+        onSubmit={handleCreateOrganization}
+      />
+
+      <QuickAddReferentialModal
+        open={refModalOpen}
+        saving={refSaving}
+        error={refError}
+        existing={refs}
+        onClose={() => setRefModalOpen(false)}
+        onSubmit={handleCreateReferential}
+      />
+    </>
   );
 }
 

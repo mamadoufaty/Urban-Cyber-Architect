@@ -53,13 +53,18 @@ export default function Workshop3Panel({
     onRecordsChange(recs);
   };
 
-  const buildProperties = (data: StrategicScenarioFormData) => {
+  const buildProperties = (data: StrategicScenarioFormData, existing?: EbiosRecord) => {
     const riskSource = riskSources.find((r) => r.id === data.risk_source_id);
+    const existingProps = existing?.properties ?? {};
     return {
+      ...existingProps,
       scenario_uid: data.scenario_uid ?? crypto.randomUUID(),
       risk_source_id: data.risk_source_id,
       risk_source_label: riskSource?.label ?? "",
+      motivation: data.motivation,
       target_objective: data.target_objective,
+      strategic_objective: data.strategic_objective,
+      targeted_essential_asset: data.targeted_essential_asset,
       feared_event: data.feared_event,
       narrative_description: data.narrative_description,
       stakeholder_ids: data.stakeholder_ids,
@@ -94,7 +99,8 @@ export default function Workshop3Panel({
   };
 
   const handleSave = async (data: StrategicScenarioFormData, existingId?: string) => {
-    const properties = buildProperties(data);
+    const existing = existingId ? scenarios.find((s) => s.id === existingId) : undefined;
+    const properties = buildProperties(data, existing);
     if (existingId) {
       await updateEbiosRecord(projectId, assessmentId, existingId, {
         label: data.label.trim(),
@@ -108,20 +114,26 @@ export default function Workshop3Panel({
         label: data.label.trim(),
         description: data.narrative_description.trim() || null,
         properties,
+        status: "proposed",
       });
     }
     await refreshWorkshop3();
     await refreshOverview();
   };
 
-  const handleValidate = async (id: string) => {
+  const setRecordStatus = async (id: string, status: string, workflowStatus?: string) => {
     const record = scenarios.find((s) => s.id === id);
     if (!record) return;
-    const data = { ...buildProperties(scenarioFromRecord(record)), workflow_status: WORKFLOW_VALIDATED };
-    await updateEbiosRecord(projectId, assessmentId, id, { properties: data });
+    const properties = buildProperties(scenarioFromRecord(record), record);
+    if (workflowStatus) properties.workflow_status = workflowStatus;
+    await updateEbiosRecord(projectId, assessmentId, id, { status, properties });
     await refreshWorkshop3();
     await refreshOverview();
   };
+
+  const handleValidate = (id: string) => setRecordStatus(id, "validated", WORKFLOW_VALIDATED);
+  const handleReject = (id: string) => setRecordStatus(id, "rejected");
+  const handleRestore = (id: string) => setRecordStatus(id, "proposed");
 
   const handleDelete = async (id: string) => {
     await deleteEbiosRecord(projectId, assessmentId, id);
@@ -171,7 +183,7 @@ export default function Workshop3Panel({
             onClick={() => handleGenerate(false)}
             disabled={generating || !riskSources.length}
           >
-            {generating ? "Génération…" : "Générer les scénarios"}
+            {generating ? "Génération…" : "🤖 Générer les scénarios stratégiques"}
           </button>
         ) : (
           <button
@@ -190,6 +202,8 @@ export default function Workshop3Panel({
         riskSources={riskSources}
         onSave={handleSave}
         onValidate={handleValidate}
+        onReject={handleReject}
+        onRestore={handleRestore}
         onDelete={handleDelete}
         onCreateNew={openCreate}
       />

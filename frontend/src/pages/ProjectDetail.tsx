@@ -5,24 +5,30 @@ import {
   listAdminOrganizations,
   listAdminUsers,
   listProjectTemplates,
+  listReferentials,
   updateProject,
   type AdminOrganization,
   type AdminUser,
   type Project,
   type ProjectTemplate,
+  type Referential,
 } from "../api";
 import ProjectActivityTab from "../components/projects/ProjectActivityTab";
+import ProjectDashboardTab from "../components/projects/ProjectDashboardTab";
 import ProjectFormModal, {
   buildProjectPayload,
   type ProjectFormValues,
 } from "../components/projects/ProjectFormModal";
 import ProjectTeamTab from "../components/projects/ProjectTeamTab";
 import { useActiveProject } from "../context/ActiveProjectContext";
+import { useAuth } from "../context/AuthContext";
+import { isAdminRole } from "../auth/permissions";
 import {
   projectPriorityLabel,
   projectStatusLabel,
 } from "../projects/constants";
-import { formatDateOnly, formatDateTime } from "../projects/format";
+import { upsertOrganization } from "../projects/organizationSelect";
+import { upsertReferential } from "../projects/referentialSelect";
 import "../styles/projects.css";
 
 const TABS = [
@@ -52,12 +58,15 @@ export default function ProjectDetail() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { setActiveProject } = useActiveProject();
+  const { user } = useAuth();
+  const canChangeOrganization = isAdminRole(user?.role);
   const activeTab = (searchParams.get("tab") as TabId) || "dashboard";
 
   const [project, setProject] = useState<Project | null>(null);
   const [organizations, setOrganizations] = useState<AdminOrganization[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
+  const [referentials, setReferentials] = useState<Referential[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -72,16 +81,18 @@ export default function ProjectDetail() {
     setLoading(true);
     setError(null);
     try {
-      const [proj, orgsRes, usersRes, tpls] = await Promise.all([
+      const [proj, orgsRes, usersRes, tpls, refsRes] = await Promise.all([
         getProject(projectId),
         listAdminOrganizations(),
         listAdminUsers(),
         listProjectTemplates().catch(() => [] as ProjectTemplate[]),
+        listReferentials(true).catch(() => ({ items: [] as Referential[] })),
       ]);
       setProject(proj);
       setOrganizations(orgsRes.items);
       setUsers(usersRes.items);
       setTemplates(tpls);
+      setReferentials(refsRes.items);
       setActiveProject({ id: proj.id, name: proj.name, code: proj.code });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Projet introuvable");
@@ -178,46 +189,11 @@ export default function ProjectDetail() {
       </nav>
 
       {activeTab === "dashboard" && (
-        <div className="project-tab-panel">
-          <div className="project-dashboard-grid">
-            <div className="card project-kpi">
-              <span className="project-kpi-label">Responsable</span>
-              <strong>{ownerName}</strong>
-            </div>
-            <div className="card project-kpi">
-              <span className="project-kpi-label">Période</span>
-              <strong>
-                {formatDateOnly(project.start_date)} → {formatDateOnly(project.end_date)}
-              </strong>
-            </div>
-            <div className="card project-kpi">
-              <span className="project-kpi-label">Dernière modification</span>
-              <strong>{formatDateTime(project.updated_at)}</strong>
-            </div>
-            <div className="card project-kpi">
-              <span className="project-kpi-label">Référentiels</span>
-              <strong>{project.referentials?.length ?? 0}</strong>
-            </div>
-          </div>
-          {project.description && (
-            <div className="card">
-              <h4>Description</h4>
-              <p style={{ color: "var(--muted)", margin: 0 }}>{project.description}</p>
-            </div>
-          )}
-          {(project.tags?.length ?? 0) > 0 && (
-            <div className="card">
-              <h4>Tags</h4>
-              <div className="project-tags">
-                {project.tags!.map((tag) => (
-                  <span key={tag} className="project-tag">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        <ProjectDashboardTab
+          project={project}
+          organizationName={orgName}
+          ownerName={ownerName}
+        />
       )}
 
       {activeTab === "team" && <ProjectTeamTab projectId={project.id} />}
@@ -318,6 +294,16 @@ export default function ProjectDetail() {
         organizations={organizations}
         users={users}
         templates={templates}
+        referentials={referentials}
+        canChangeOrganization={canChangeOrganization}
+        defaultOrganizationId={user?.organizationId ?? null}
+        onOrganizationCreated={(org) =>
+          setOrganizations((prev) => upsertOrganization(prev, org))
+        }
+        canManageReferentials={canChangeOrganization}
+        onReferentialCreated={(ref) =>
+          setReferentials((prev) => upsertReferential(prev, ref))
+        }
         onClose={() => {
           setSettingsOpen(false);
           setFormError(null);

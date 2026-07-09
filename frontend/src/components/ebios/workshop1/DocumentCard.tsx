@@ -6,15 +6,26 @@ import {
   documentFromRecord,
   type DocumentFormData,
 } from "./constants";
+import ProposalActions, { proposalStatusClass, proposalStatusLabel } from "./ProposalStatus";
 import RecordFormModal, { FormField, FormInput, FormSelect, FormTextarea } from "./RecordFormModal";
 
 type Props = {
   records: EbiosRecord[];
   onSave: (data: DocumentFormData, existingId?: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onValidate: (id: string) => Promise<void>;
+  onReject: (id: string) => Promise<void>;
+  onRestore: (id: string) => Promise<void>;
 };
 
-export default function DocumentCard({ records, onSave, onDelete }: Props) {
+export default function DocumentCard({
+  records,
+  onSave,
+  onDelete,
+  onValidate,
+  onReject,
+  onRestore,
+}: Props) {
   const items = records.filter((r) => r.record_type === "reference_document");
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -66,6 +77,11 @@ export default function DocumentCard({ records, onSave, onDelete }: Props) {
             <li key={item.id}>
               <div className="eb-card-item-main">
                 <strong>{item.label}</strong>
+                {proposalStatusLabel(item.status) && (
+                  <span className={`eb-status-badge ${proposalStatusClass(item.status)}`}>
+                    {proposalStatusLabel(item.status)}
+                  </span>
+                )}
                 <div className="eb-card-meta">
                   {item.properties.doc_type ? <span>{String(item.properties.doc_type)}</span> : null}
                   {item.properties.version ? <span>v{String(item.properties.version)}</span> : null}
@@ -76,6 +92,12 @@ export default function DocumentCard({ records, onSave, onDelete }: Props) {
                 ) : null}
               </div>
               <div className="eb-card-item-actions">
+                <ProposalActions
+                  status={item.status}
+                  onValidate={() => onValidate(item.id)}
+                  onReject={() => onReject(item.id)}
+                  onRestore={() => onRestore(item.id)}
+                />
                 <button type="button" className="eb-btn eb-btn-ghost" onClick={() => openEdit(item)}>
                   Modifier
                 </button>

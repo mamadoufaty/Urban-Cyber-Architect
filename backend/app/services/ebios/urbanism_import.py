@@ -106,10 +106,22 @@ async def import_urbanism_supporting_assets(
     assessment_id: UUID,
     project_id: UUID,
 ) -> tuple[list[EbiosRecord], int]:
-    """Synchronise les biens supports — idempotent sur (assessment_id, urbanism_entity_id)."""
+    """Synchronise les biens supports — idempotent sur (assessment_id, urbanism_entity_id).
+
+    Ne porte que sur la cartographie active du projet (cf. multi-cartographies) :
+    les cartographies non actives ne sont jamais mélangées dans EBIOS RM.
+    """
+    from app.services import cartography_service
+
+    try:
+        _cartography, version = await cartography_service.resolve_read_version(db, project_id)
+        version_filter = UrbanismEntity.cartography_version_id == version.id
+    except cartography_service.CartographyError:
+        version_filter = UrbanismEntity.project_id == project_id
+
     urbanism_result = await db.execute(
         select(UrbanismEntity)
-        .where(UrbanismEntity.project_id == project_id)
+        .where(UrbanismEntity.project_id == project_id, version_filter)
         .order_by(UrbanismEntity.couche, UrbanismEntity.label)
     )
     urbanism_entities = list(urbanism_result.scalars().all())

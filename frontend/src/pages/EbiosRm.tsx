@@ -6,9 +6,12 @@ import {
   getEbiosMetamodel,
   getEbiosOverview,
   getEbiosRecords,
+  listCartographies,
   listProjects,
+  type Cartography,
   type Project,
 } from "../api";
+import { resolveDefaultCartographyId, sortCartographies } from "../components/urbanism/cartographySelect";
 import EbiosExtensionPanel from "../components/ebios/EbiosExtensionPanel";
 import EbiosProgressBar from "../components/ebios/EbiosProgressBar";
 import EbiosRibbon from "../components/ebios/EbiosRibbon";
@@ -28,6 +31,8 @@ export default function EbiosRm() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedId, setSelectedId] = useState(searchParams.get("project") ?? "");
+  const [cartographies, setCartographies] = useState<Cartography[]>([]);
+  const [selectedCartographyId, setSelectedCartographyId] = useState<string | null>(null);
   const [metamodel, setMetamodel] = useState<EbiosMetamodel | null>(null);
   const [extensions, setExtensions] = useState<EbiosExtensionRegistry | null>(null);
   const [assessment, setAssessment] = useState<EbiosAssessment | null>(null);
@@ -54,11 +59,14 @@ export default function EbiosRm() {
     setExtensions(ext);
   }, []);
 
-  const loadProjectData = useCallback(async (projectId: string) => {
+  const loadProjectData = useCallback(async (projectId: string, cartographyId: string | null) => {
     setLoading(true);
     setError(null);
     try {
-      const ass = await getEbiosAssessment(projectId);
+      // Chaque cartographie possède sa propre étude EBIOS, totalement isolée :
+      // changer de cartographie ne doit jamais réafficher les ateliers, le
+      // score ou les documents d'une étude précédente.
+      const ass = await getEbiosAssessment(projectId, cartographyId);
       setAssessment(ass);
       setActiveWorkshop(ass.current_workshop);
       const [ov, recs] = await Promise.all([
@@ -71,6 +79,17 @@ export default function EbiosRm() {
       setError(e instanceof Error ? e.message : "Erreur de chargement EBIOS");
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const loadCartographies = useCallback(async (projectId: string) => {
+    try {
+      const res = await listCartographies(projectId);
+      setCartographies(res.items);
+      setSelectedCartographyId((previous) => resolveDefaultCartographyId(res.items, previous));
+    } catch {
+      setCartographies([]);
+      setSelectedCartographyId(null);
     }
   }, []);
 
@@ -111,8 +130,14 @@ export default function EbiosRm() {
 
   useEffect(() => {
     if (!selectedId) return;
-    loadProjectData(selectedId);
-  }, [selectedId, loadProjectData]);
+    setSelectedCartographyId(null);
+    loadCartographies(selectedId);
+  }, [selectedId, loadCartographies]);
+
+  useEffect(() => {
+    if (!selectedId || !cartographies.length) return;
+    loadProjectData(selectedId, selectedCartographyId);
+  }, [selectedId, selectedCartographyId, cartographies, loadProjectData]);
 
   useEffect(() => {
     if (!selectedId || !assessment) return;
@@ -122,6 +147,10 @@ export default function EbiosRm() {
   const handleProjectChange = (id: string) => {
     setSelectedId(id);
     setSearchParams(id ? { project: id } : {});
+  };
+
+  const handleCartographyChange = (id: string) => {
+    setSelectedCartographyId(id);
   };
 
   const refreshOverview = useCallback(async () => {
@@ -148,6 +177,9 @@ export default function EbiosRm() {
         projects={projects}
         selectedProjectId={selectedId}
         onProjectChange={handleProjectChange}
+        cartographies={sortCartographies(cartographies)}
+        selectedCartographyId={selectedCartographyId}
+        onCartographyChange={handleCartographyChange}
         assessmentTitle={assessment?.title ?? "Analyse EBIOS RM"}
         overallProgress={overview?.overall_progress_percent ?? 0}
       />

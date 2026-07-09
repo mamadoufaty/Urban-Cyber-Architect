@@ -194,6 +194,20 @@ export interface UrbanismGraph {
   };
   relation_categories: Record<string, string>;
   relation_type_legend: string[];
+  cartography?: {
+    id: string;
+    name: string;
+    type: string;
+    status: string;
+    is_active: boolean;
+    is_archived: boolean;
+  };
+  cartography_version?: {
+    id: string;
+    version: string;
+    status: string;
+    is_current: boolean;
+  };
 }
 
 export const RELATION_FILTER_OPTIONS = [

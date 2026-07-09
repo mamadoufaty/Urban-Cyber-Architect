@@ -5,14 +5,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
 
-from app.api.routes import admin, auth, connectors_wazuh, deliverables, ebios, governance, grc, grc_ptr, grc_soa, knowledge, orchestration, projects, prompts, soc, urbanism
+from app.api.routes import admin, auth, cartography, connectors_wazuh, deliverables, ebios, ebios_deliverables, governance, grc, grc_ptr, grc_soa, knowledge, orchestration, projects, prompts, soc, urbanism
 from app.config import settings
 from app.database import Base, async_session, engine
-import app.models.admin  # noqa: F401 — enregistrement des tables Administration
-import app.models.ebios  # noqa: F401 — enregistrement des tables EBIOS
-import app.models.deliverables  # noqa: F401 — enregistrement des tables livrables
-import app.models.project_core  # noqa: F401 — membres et activité projet V1.3
+from app.models import register_all_models  # enregistrement de tous les modèles SQLAlchemy
 from app.services.admin.seed_service import run_admin_seed
+from app.services.cartography_service import ensure_default_cartography_for_all_projects
+from app.services.ebios.assessment_service import backfill_assessment_cartography_ids
+
+register_all_models()
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("app.services.urbanism_engine").setLevel(logging.INFO)
@@ -64,6 +65,24 @@ def _ensure_schema_columns(sync_conn) -> None:
             )
         if "tags" in cols:
             sync_conn.execute(text("UPDATE projects SET tags = '[]' WHERE tags IS NULL"))
+    if insp.has_table("urbanism_entities"):
+        cols = {c["name"] for c in insp.get_columns("urbanism_entities")}
+        if "cartography_version_id" not in cols:
+            sync_conn.execute(
+                text("ALTER TABLE urbanism_entities ADD COLUMN cartography_version_id VARCHAR(36)")
+            )
+    if insp.has_table("urbanism_relations"):
+        cols = {c["name"] for c in insp.get_columns("urbanism_relations")}
+        if "cartography_version_id" not in cols:
+            sync_conn.execute(
+                text("ALTER TABLE urbanism_relations ADD COLUMN cartography_version_id VARCHAR(36)")
+            )
+    if insp.has_table("ebios_assessments"):
+        cols = {c["name"] for c in insp.get_columns("ebios_assessments")}
+        if "cartography_id" not in cols:
+            sync_conn.execute(
+                text("ALTER TABLE ebios_assessments ADD COLUMN cartography_id VARCHAR(36)")
+            )
 
 
 @asynccontextmanager
@@ -74,6 +93,14 @@ async def lifespan(app: FastAPI):
     async with async_session() as session:
         await run_admin_seed(session)
         await session.commit()
+    async with async_session() as session:
+        # §15 — tout projet existant reçoit automatiquement une cartographie par
+        # défaut contenant son graphe actuel (idempotent).
+        await ensure_default_cartography_for_all_projects(session)
+    async with async_session() as session:
+        # Rattache les études EBIOS créées avant l'introduction du scoping par
+        # cartographie à la cartographie active de leur projet (idempotent).
+        await backfill_assessment_cartography_ids(session)
     yield
 
 
@@ -99,7 +126,9 @@ app.include_router(governance.router, prefix="/api")
 app.include_router(prompts.router, prefix="/api")
 app.include_router(knowledge.router, prefix="/api")
 app.include_router(urbanism.router, prefix="/api")
+app.include_router(cartography.router, prefix="/api")
 app.include_router(ebios.router, prefix="/api")
+app.include_router(ebios_deliverables.router, prefix="/api")
 app.include_router(grc.router, prefix="/api")
 app.include_router(grc_soa.router, prefix="/api")
 app.include_router(grc_ptr.router, prefix="/api")

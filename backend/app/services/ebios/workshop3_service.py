@@ -18,20 +18,33 @@ from app.services.ebios.workshop2_service import is_risk_source_complete
 
 LINK_DERIVES_FROM_RISK = "derives_from_risk_source"
 
+# Un scénario rejeté par l'utilisateur ne compte jamais dans la progression —
+# ni comme validé, ni comme « à traiter » (méthodologie EBIOS RM,
+# §Contraintes Atelier 3). Il est identifié via le statut haut-niveau
+# ``EbiosRecord.status`` (aligné sur les Ateliers 1 et 2).
+_EXCLUDED_STATUSES = {"proposed", "rejected"}
+
 
 def _props(record) -> dict:
     return record.properties or {}
 
 
 def is_scenario_validated(record) -> bool:
-    return (
-        record.record_type == "strategic_scenario"
-        and _props(record).get("workflow_status") == WORKFLOW_VALIDATED
-    )
+    if record.record_type != "strategic_scenario":
+        return False
+    if getattr(record, "status", None) == "validated":
+        return True
+    # Compatibilité ascendante : le cycle historique de l'atelier 3 valide via
+    # ``properties.workflow_status`` (toujours utilisé par les Ateliers 4/5).
+    return _props(record).get("workflow_status") == WORKFLOW_VALIDATED
 
 
 def compute_workshop3_progress(scenarios) -> int:
-    strategic = [r for r in scenarios if r.record_type == "strategic_scenario"]
+    strategic = [
+        r
+        for r in scenarios
+        if r.record_type == "strategic_scenario" and getattr(r, "status", None) != "rejected"
+    ]
     if not strategic:
         return 0
     validated = sum(1 for s in strategic if is_scenario_validated(s))
@@ -89,30 +102,83 @@ async def cleanup_scenario_graph(db: AsyncSession, assessment_id: UUID, scenario
 async def generate_strategic_scenarios(
     db: AsyncSession,
     assessment_id: UUID,
+    project_id: UUID | None = None,
     *,
     regenerate: bool = False,
 ) -> list[EbiosRecord]:
+    """Analyse les sources de risque de l'Atelier 2 **validées** et les parties
+    prenantes de l'Atelier 1 **validées** pour proposer un scénario
+    stratégique par source — toujours à l'état ``proposed`` (jamais validé
+    d'office).
+
+    Idempotent par défaut (``regenerate=False``) : un scénario déjà généré
+    pour une source de risque n'est jamais recréé. Avec ``regenerate=True``,
+    seules les propositions non encore validées sont remplacées (les
+    scénarios déjà validés ou modifiés manuellement ne sont jamais touchés).
+    """
     w2_records = await list_records(db, assessment_id, workshop_number=2)
     w1_records = await list_records(db, assessment_id, workshop_number=1)
     complete_sources = [r for r in w2_records if is_risk_source_complete(r)]
-    stakeholder_records = [r for r in w1_records if r.record_type == "stakeholder"]
+    stakeholder_records = [
+        r
+        for r in w1_records
+        if r.record_type == "stakeholder" and r.status not in _EXCLUDED_STATUSES
+    ]
     asset_records = [r for r in w2_records if r.record_type == "supporting_asset"]
 
+    cartography_id: UUID | None = None
+    cartography_version_id: UUID | None = None
+    if project_id is not None:
+        from app.services import cartography_service
+
+        try:
+            cartography, version = await cartography_service.resolve_read_version(db, project_id)
+            cartography_id, cartography_version_id = cartography.id, version.id
+        except cartography_service.CartographyError:
+            pass
+
+    existing_scenarios = [
+        r for r in await list_records(db, assessment_id, workshop_number=3)
+        if r.record_type == "strategic_scenario"
+    ]
+
+    def _is_cartography_generated(record: EbiosRecord) -> bool:
+        return _props(record).get("generated_from", {}).get("source") == "cartography"
+
+    deleted_any = False
     if regenerate:
-        existing = await list_records(db, assessment_id, workshop_number=3)
-        for record in existing:
-            if record.record_type == "strategic_scenario":
+        for record in existing_scenarios:
+            if record.status == "proposed" and _is_cartography_generated(record):
                 await cleanup_scenario_graph(db, assessment_id, record.id)
                 await db.delete(record)
+                deleted_any = True
         await db.flush()
+        existing_scenarios = [
+            r
+            for r in existing_scenarios
+            if not (r.status == "proposed" and _is_cartography_generated(r))
+        ]
 
     created: list[EbiosRecord] = []
     for source in complete_sources:
-        if not regenerate:
-            existing = await _scenario_for_risk_source(db, assessment_id, source.id)
-            if existing:
-                continue
-        generated = generate_strategic_scenario(source, stakeholder_records, asset_records, auto=True)
+        existing = next(
+            (
+                r
+                for r in existing_scenarios
+                if str(_props(r).get("risk_source_id")) == str(source.id)
+            ),
+            None,
+        )
+        if existing:
+            continue
+        generated = generate_strategic_scenario(
+            source,
+            stakeholder_records,
+            asset_records,
+            auto=True,
+            cartography_id=cartography_id,
+            cartography_version_id=cartography_version_id,
+        )
         scenario = EbiosRecord(
             assessment_id=assessment_id,
             workshop_number=3,
@@ -120,16 +186,18 @@ async def generate_strategic_scenarios(
             label=generated["title"],
             description=generated["narrative_description"],
             properties={k: v for k, v in generated.items() if k != "title"},
-            status="draft",
+            status="proposed",
         )
         db.add(scenario)
         await db.flush()
         await sync_scenario_graph(db, scenario)
         created.append(scenario)
+        existing_scenarios.append(scenario)
 
-    await db.commit()
-    for record in created:
-        await db.refresh(record)
+    if created or deleted_any:
+        await db.commit()
+        for record in created:
+            await db.refresh(record)
     return created
 
 

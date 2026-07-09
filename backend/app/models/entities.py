@@ -144,6 +144,13 @@ class UrbanismEntity(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"), index=True)
+    # Cartographie (et version) propriétaire — scope réel du graphe depuis le
+    # versionning multi-cartographies. Nullable pour compat descendante avec les
+    # lignes créées avant cette évolution ; comblé au premier accès par
+    # ``cartography_service.ensure_default_cartography``.
+    cartography_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cartography_versions.id"), nullable=True, index=True
+    )
     entity_type: Mapped[str] = mapped_column(String(50), index=True)
     couche: Mapped[str] = mapped_column(String(50), index=True)
     label: Mapped[str] = mapped_column(String(255))
@@ -165,14 +172,23 @@ class UrbanismRelation(Base):
 
     __tablename__ = "urbanism_relations"
     __table_args__ = (
+        # NB : sur une base créée avant l'introduction des cartographies,
+        # l'ancienne contrainte (project_id, source_id, relation_type, target_id)
+        # reste en vigueur au niveau SQLite/Postgres jusqu'à recréation de la
+        # table. Sans incidence pratique : chaque copie-sur-écriture de version
+        # régénère des identifiants d'entités propres, donc source_id/target_id
+        # ne peuvent pas entrer en collision entre deux versions/cartographies.
         UniqueConstraint(
-            "project_id", "source_id", "relation_type", "target_id",
+            "cartography_version_id", "source_id", "relation_type", "target_id",
             name="uq_urbanism_relation",
         ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"), index=True)
+    cartography_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cartography_versions.id"), nullable=True, index=True
+    )
     source_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("urbanism_entities.id"), index=True)
     target_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("urbanism_entities.id"), index=True)
     relation_type: Mapped[str] = mapped_column(String(100))

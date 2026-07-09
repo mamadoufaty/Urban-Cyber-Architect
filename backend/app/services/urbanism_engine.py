@@ -69,6 +69,7 @@ async def sync_missing_r05_relations(
     project_id: UUID,
     entities: list[UrbanismEntity],
     relations: list[UrbanismRelation],
+    cartography_version_id: UUID | None = None,
 ) -> list[UrbanismRelation]:
     """Crée R05 manquante pour le triangle canonique Métier → Objectif / Processus (1:1)."""
     entity_map = {e.id: e for e in entities}
@@ -100,6 +101,7 @@ async def sync_missing_r05_relations(
 
         rel = UrbanismRelation(
             project_id=project_id,
+            cartography_version_id=cartography_version_id,
             source_id=objectif_id,
             target_id=processus_id,
             relation_type=R05_RELATION_TYPE,
@@ -121,18 +123,27 @@ async def build_cartography(
     session: AsyncSession,
     project: Project,
     relation_categories: list[str] | None = None,
+    cartography_version_id: UUID | None = None,
 ) -> dict[str, Any]:
-    entities_result = await session.execute(
-        select(UrbanismEntity).where(UrbanismEntity.project_id == project.id)
-    )
+    entity_stmt = select(UrbanismEntity).where(UrbanismEntity.project_id == project.id)
+    relation_stmt = select(UrbanismRelation).where(UrbanismRelation.project_id == project.id)
+    if cartography_version_id is not None:
+        entity_stmt = entity_stmt.where(
+            UrbanismEntity.cartography_version_id == cartography_version_id
+        )
+        relation_stmt = relation_stmt.where(
+            UrbanismRelation.cartography_version_id == cartography_version_id
+        )
+
+    entities_result = await session.execute(entity_stmt)
     entities = list(entities_result.scalars().all())
 
-    relations_result = await session.execute(
-        select(UrbanismRelation).where(UrbanismRelation.project_id == project.id)
-    )
+    relations_result = await session.execute(relation_stmt)
     all_relations = list(relations_result.scalars().all())
 
-    synced = await sync_missing_r05_relations(session, project.id, entities, all_relations)
+    synced = await sync_missing_r05_relations(
+        session, project.id, entities, all_relations, cartography_version_id
+    )
     if synced:
         all_relations = all_relations + synced
 
@@ -241,6 +252,7 @@ async def build_cartography(
     return {
         "project_id": str(project.id),
         "project_name": project.name,
+        "cartography_version_id": str(cartography_version_id) if cartography_version_id else None,
         "organization": org,
         "author": org.get("author") or org.get("name") or "Urban Cyber Architect",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -392,8 +404,37 @@ async def get_project_cartography(
     session: AsyncSession,
     project_id: UUID,
     categories: list[str] | None = None,
+    cartography_id: UUID | None = None,
+    version_id: UUID | None = None,
 ) -> dict[str, Any] | None:
+    from app.services import cartography_service
+
     project = await session.get(Project, project_id)
     if not project:
         return None
-    return await build_cartography(session, project, categories)
+    if version_id is not None:
+        cartography, version = await cartography_service.get_version_or_404(session, version_id)
+        if cartography.project_id != project_id:
+            raise cartography_service.CartographyError(
+                "Cette version n'appartient pas au projet"
+            )
+    else:
+        cartography, version = await cartography_service.resolve_read_version(
+            session, project_id, cartography_id
+        )
+    graph = await build_cartography(session, project, categories, version.id)
+    graph["cartography"] = {
+        "id": str(cartography.id),
+        "name": cartography.name,
+        "type": cartography.type,
+        "status": cartography.status,
+        "is_active": cartography.is_active,
+        "is_archived": cartography.is_archived,
+    }
+    graph["cartography_version"] = {
+        "id": str(version.id),
+        "version": version.version,
+        "status": version.status,
+        "is_current": version.is_current,
+    }
+    return graph

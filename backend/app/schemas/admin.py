@@ -33,6 +33,42 @@ class OrganizationRead(BaseModel):
     updated_at: datetime
 
 
+class ReferentialCreate(BaseModel):
+    label: str = Field(..., min_length=1, max_length=150)
+    code: str | None = Field(None, max_length=100)
+    category: str | None = Field(None, max_length=100)
+    description: str | None = None
+    status: str = "active"
+    sort_order: int | None = None
+
+
+class ReferentialUpdate(BaseModel):
+    label: str | None = Field(None, min_length=1, max_length=150)
+    category: str | None = Field(None, max_length=100)
+    description: str | None = None
+    status: str | None = None
+    sort_order: int | None = None
+
+
+class ReferentialRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    code: str
+    label: str
+    category: str | None
+    description: str | None
+    status: str
+    sort_order: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ReferentialListResponse(BaseModel):
+    total: int
+    items: list[ReferentialRead]
+
+
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=2, max_length=100)
     password: str = Field(..., min_length=6, max_length=128)

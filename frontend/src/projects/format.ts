@@ -41,7 +41,7 @@ export function validateProjectDateRange(
 ): string | null {
   if (!startDate || !endDate) return null;
   if (endDate < startDate) {
-    return "La date de fin doit être postérieure ou égale à la date de début.";
+    return "La date de fin doit être postérieure à la date de début.";
   }
   return null;
 }

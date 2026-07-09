@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "rssi" | "consultant" | "soc" | "metier";
+export type UserRole = "superadmin" | "admin" | "rssi" | "consultant" | "soc" | "metier";
 
 export type AppModule =
   | "dashboard"
@@ -23,6 +23,7 @@ export const ALL_MODULES: AppModule[] = [
 
 /** Matrice RBAC — modules autorisés par rôle. */
 export const ROLE_PERMISSIONS: Record<UserRole, readonly AppModule[]> = {
+  superadmin: ALL_MODULES,
   admin: ALL_MODULES,
   rssi: ["dashboard", "projects", "urbanism", "soc", "grc", "ai", "settings"],
   consultant: ["dashboard", "projects", "urbanism", "grc", "ai"],
@@ -32,6 +33,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly AppModule[]> = {
 
 export function isUserRole(role: string): role is UserRole {
   return role in ROLE_PERMISSIONS;
+}
+
+/** Rôles disposant des droits d'administration complète (organisations, référentiels…). */
+export function isAdminRole(role: string | undefined | null): boolean {
+  return role === "admin" || role === "superadmin";
 }
 
 export function hasPermission(role: string | undefined | null, module: AppModule): boolean {
@@ -45,6 +51,7 @@ const PATH_MODULE_MAP: Record<string, AppModule> = {
   "/": "dashboard",
   "/projects": "projects",
   "/schema-urbanisme": "urbanism",
+  "/import-cartographie": "urbanism",
   "/validation-metamodele": "urbanism",
   "/objectifs": "urbanism",
   "/metiers": "urbanism",
@@ -67,6 +74,7 @@ const PATH_MODULE_MAP: Record<string, AppModule> = {
   "/knowledge-base": "ai",
   "/administration/users": "administration",
   "/administration/organizations": "administration",
+  "/administration/referentials": "administration",
 };
 
 export function moduleForPath(pathname: string): AppModule | null {

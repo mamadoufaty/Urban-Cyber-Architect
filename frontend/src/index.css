@@ -1556,6 +1556,42 @@ pre.json {
   text-align: center;
 }
 
+.login-bootstrap-alert {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fde68a;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.login-bootstrap-toggle {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  color: #fde68a;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+}
+
+.login-bootstrap-title {
+  font-size: 1rem;
+  margin: 0 0 0.25rem;
+}
+
+.login-bootstrap-success {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
 .access-denied {
   min-height: 50vh;
   display: grid;

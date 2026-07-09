@@ -17,6 +17,10 @@ from app.schemas.admin import (
     OrganizationUpdate,
     PermissionListResponse,
     PermissionRead,
+    ReferentialCreate,
+    ReferentialListResponse,
+    ReferentialRead,
+    ReferentialUpdate,
     RoleCreate,
     RoleListResponse,
     RolePermissionsUpdate,
@@ -28,12 +32,22 @@ from app.schemas.admin import (
     UserResetPassword,
     UserUpdate,
 )
-from app.services.admin import audit_service, organization_service, permission_service, role_service, user_service
+from app.services.admin.admin_guard import LastAdministratorError
+from app.services.admin import (
+    audit_service,
+    organization_service,
+    permission_service,
+    referential_service,
+    role_service,
+    user_service,
+)
 
 router = APIRouter(prefix="/admin", tags=["administration"])
 
 
 def _http_error(exc: ValueError) -> HTTPException:
+    if isinstance(exc, LastAdministratorError):
+        return HTTPException(status_code=409, detail=str(exc))
     return HTTPException(status_code=400, detail=str(exc))
 
 
@@ -74,7 +88,7 @@ async def api_update_user(user_id: UUID, body: UserUpdate, db: AsyncSession = De
         await db.commit()
         return user
     except ValueError as e:
-        raise HTTPException(404, str(e)) from e
+        raise _http_error(e) from e
 
 
 @router.delete("/users/{user_id}", status_code=204)
@@ -86,7 +100,7 @@ async def api_delete_user(user_id: UUID, db: AsyncSession = Depends(get_db)):
         )
         await db.commit()
     except ValueError as e:
-        raise HTTPException(404, str(e)) from e
+        raise _http_error(e) from e
 
 
 @router.patch("/users/{user_id}/disable", response_model=UserRead)
@@ -99,7 +113,7 @@ async def api_disable_user(user_id: UUID, db: AsyncSession = Depends(get_db)):
         await db.commit()
         return user
     except ValueError as e:
-        raise HTTPException(404, str(e)) from e
+        raise _http_error(e) from e
 
 
 @router.patch("/users/{user_id}/enable", response_model=UserRead)
@@ -221,6 +235,82 @@ async def api_deactivate_organization(organization_id: UUID, db: AsyncSession = 
         )
         await db.commit()
         return OrganizationRead.model_validate(org)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+@router.get("/referentials", response_model=ReferentialListResponse)
+async def api_list_referentials(
+    active_only: bool = False, db: AsyncSession = Depends(get_db)
+):
+    items, total = await referential_service.list_referentials(db, active_only=active_only)
+    return ReferentialListResponse(
+        total=total, items=[ReferentialRead.model_validate(r) for r in items]
+    )
+
+
+@router.post("/referentials", response_model=ReferentialRead, status_code=201)
+async def api_create_referential(body: ReferentialCreate, db: AsyncSession = Depends(get_db)):
+    try:
+        ref = await referential_service.create_referential(db, body)
+        await audit_service.log_action(
+            db, action="referential.create", object_type="referential", object_id=str(ref.id)
+        )
+        await db.commit()
+        return ReferentialRead.model_validate(ref)
+    except ValueError as e:
+        raise _http_error(e) from e
+
+
+@router.put("/referentials/{referential_id}", response_model=ReferentialRead)
+async def api_update_referential(
+    referential_id: UUID, body: ReferentialUpdate, db: AsyncSession = Depends(get_db)
+):
+    try:
+        ref = await referential_service.update_referential(db, referential_id, body)
+        await audit_service.log_action(
+            db,
+            action="referential.update",
+            object_type="referential",
+            object_id=str(referential_id),
+        )
+        await db.commit()
+        return ReferentialRead.model_validate(ref)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+@router.patch("/referentials/{referential_id}/activate", response_model=ReferentialRead)
+async def api_activate_referential(referential_id: UUID, db: AsyncSession = Depends(get_db)):
+    try:
+        ref = await referential_service.set_status(db, referential_id, "active")
+        await db.commit()
+        return ReferentialRead.model_validate(ref)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+@router.patch("/referentials/{referential_id}/deactivate", response_model=ReferentialRead)
+async def api_deactivate_referential(referential_id: UUID, db: AsyncSession = Depends(get_db)):
+    try:
+        ref = await referential_service.set_status(db, referential_id, "archived")
+        await db.commit()
+        return ReferentialRead.model_validate(ref)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+@router.delete("/referentials/{referential_id}", status_code=204)
+async def api_delete_referential(referential_id: UUID, db: AsyncSession = Depends(get_db)):
+    try:
+        await referential_service.delete_referential(db, referential_id)
+        await audit_service.log_action(
+            db,
+            action="referential.delete",
+            object_type="referential",
+            object_id=str(referential_id),
+        )
+        await db.commit()
     except ValueError as e:
         raise HTTPException(404, str(e)) from e
 

@@ -40,14 +40,23 @@ def resolve_entity_position(
     return pos, {"mode": "auto", "locked": False, "x": pos["x"], "y": pos["y"]}
 
 
+def _owned(entity: UrbanismEntity | None, project_id: UUID, cartography_version_id: UUID | None) -> bool:
+    if not entity or entity.project_id != project_id:
+        return False
+    if cartography_version_id is not None and entity.cartography_version_id != cartography_version_id:
+        return False
+    return True
+
+
 async def save_entity_layout(
     db: AsyncSession,
     project_id: UUID,
     entity_id: UUID,
     layout: dict[str, Any],
+    cartography_version_id: UUID | None = None,
 ) -> dict[str, Any]:
     entity = await db.get(UrbanismEntity, entity_id)
-    if not entity or entity.project_id != project_id:
+    if not _owned(entity, project_id, cartography_version_id):
         raise ValueError("Entité introuvable")
     stored = {
         "mode": "manual",
@@ -68,12 +77,13 @@ async def save_entity_layouts_bulk(
     db: AsyncSession,
     project_id: UUID,
     layouts: list[dict[str, Any]],
+    cartography_version_id: UUID | None = None,
 ) -> list[dict[str, Any]]:
     saved: list[dict[str, Any]] = []
     for item in layouts:
         entity_id = UUID(str(item["entity_id"]))
         entity = await db.get(UrbanismEntity, entity_id)
-        if not entity or entity.project_id != project_id:
+        if not _owned(entity, project_id, cartography_version_id):
             raise ValueError(f"Entité introuvable: {entity_id}")
         stored = {
             "mode": "manual",
@@ -94,9 +104,10 @@ async def clear_entity_layout(
     db: AsyncSession,
     project_id: UUID,
     entity_id: UUID,
+    cartography_version_id: UUID | None = None,
 ) -> None:
     entity = await db.get(UrbanismEntity, entity_id)
-    if not entity or entity.project_id != project_id:
+    if not _owned(entity, project_id, cartography_version_id):
         raise ValueError("Entité introuvable")
     props = dict(entity.properties or {})
     props.pop(LAYOUT_KEY, None)

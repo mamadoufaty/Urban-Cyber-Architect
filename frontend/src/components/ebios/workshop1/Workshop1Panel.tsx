@@ -1,6 +1,8 @@
+import { useState } from "react";
 import {
   createEbiosRecord,
   deleteEbiosRecord,
+  generateEbiosWorkshop1FromCartography,
   updateEbiosRecord,
 } from "../../../api";
 import type { EbiosOverview, EbiosRecord, EbiosWorkshopSpec } from "../types";
@@ -33,7 +35,10 @@ export default function Workshop1Panel({
   records,
   onRecordsChange,
   refreshOverview,
+  refreshRecords,
 }: Props) {
+  const [generating, setGenerating] = useState(false);
+  const [generateMessage, setGenerateMessage] = useState<string | null>(null);
   const upsertRecord = async (
     recordType: string,
     label: string,
@@ -65,6 +70,33 @@ export default function Workshop1Panel({
     await deleteEbiosRecord(projectId, assessmentId, id);
     onRecordsChange(records.filter((r) => r.id !== id));
     await refreshOverview();
+  };
+
+  const setRecordStatus = async (id: string, status: string) => {
+    const updated = await updateEbiosRecord(projectId, assessmentId, id, { status });
+    onRecordsChange(records.map((r) => (r.id === id ? updated : r)));
+    await refreshOverview();
+  };
+
+  const handleValidate = (id: string) => setRecordStatus(id, "validated");
+  const handleReject = (id: string) => setRecordStatus(id, "rejected");
+  const handleRestore = (id: string) => setRecordStatus(id, "proposed");
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setGenerateMessage(null);
+    try {
+      const result = await generateEbiosWorkshop1FromCartography(projectId, assessmentId);
+      await refreshRecords();
+      await refreshOverview();
+      setGenerateMessage(
+        result.generated_count > 0
+          ? `${result.generated_count} proposition(s) générée(s) depuis la cartographie active — à valider ci-dessous.`
+          : "Aucune nouvelle proposition : la cartographie active ne contient aucun élément exploitable ou toutes les propositions existent déjà."
+      );
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const saveScope = (data: ScopeFormData, existingId?: string) =>
@@ -135,11 +167,58 @@ export default function Workshop1Panel({
         <p>{workshop.description}</p>
       </header>
 
+      <div className="eb-workshop1-toolbar">
+        <p className="eb-workshop1-toolbar-intro">
+          Analysez la cartographie active (organisations, métiers, processus, activités,
+          applications, composants techniques) pour proposer automatiquement le périmètre, les
+          parties prenantes, le socle de sécurité et compléter les documents de référence. Chaque
+          proposition reste à <strong>valider</strong>, <strong>modifier</strong> ou{" "}
+          <strong>rejeter</strong> — rien n&apos;est jamais considéré comme acquis.
+        </p>
+        <button
+          type="button"
+          className="eb-btn eb-btn-primary"
+          onClick={handleGenerate}
+          disabled={generating}
+        >
+          {generating ? "Analyse de la cartographie…" : "🤖 Générer automatiquement depuis la cartographie"}
+        </button>
+      </div>
+      {generateMessage && <p className="eb-urbanism-msg">{generateMessage}</p>}
+
       <div className="eb-workshop1-grid">
-        <ScopeCard records={records} onSave={saveScope} onDelete={removeRecord} />
-        <StakeholderCard records={records} onSave={saveStakeholder} onDelete={removeRecord} />
-        <BaselineCard records={records} onSave={saveBaseline} onDelete={removeRecord} />
-        <DocumentCard records={records} onSave={saveDocument} onDelete={removeRecord} />
+        <ScopeCard
+          records={records}
+          onSave={saveScope}
+          onDelete={removeRecord}
+          onValidate={handleValidate}
+          onReject={handleReject}
+          onRestore={handleRestore}
+        />
+        <StakeholderCard
+          records={records}
+          onSave={saveStakeholder}
+          onDelete={removeRecord}
+          onValidate={handleValidate}
+          onReject={handleReject}
+          onRestore={handleRestore}
+        />
+        <BaselineCard
+          records={records}
+          onSave={saveBaseline}
+          onDelete={removeRecord}
+          onValidate={handleValidate}
+          onReject={handleReject}
+          onRestore={handleRestore}
+        />
+        <DocumentCard
+          records={records}
+          onSave={saveDocument}
+          onDelete={removeRecord}
+          onValidate={handleValidate}
+          onReject={handleReject}
+          onRestore={handleRestore}
+        />
       </div>
     </div>
   );

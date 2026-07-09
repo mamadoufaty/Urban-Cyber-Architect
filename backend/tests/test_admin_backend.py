@@ -53,7 +53,7 @@ async def test_seed_idempotent(db_session: AsyncSession):
     user_count = await db_session.scalar(select(func.count()).select_from(User))
 
     assert org_count == 1
-    assert role_count == 5
+    assert role_count == 6
     assert perm_count == 17
     assert user_count == 5
 
@@ -61,7 +61,7 @@ async def test_seed_idempotent(db_session: AsyncSession):
     await db_session.commit()
 
     assert await db_session.scalar(select(func.count()).select_from(Organization)) == 1
-    assert await db_session.scalar(select(func.count()).select_from(Role)) == 5
+    assert await db_session.scalar(select(func.count()).select_from(Role)) == 6
     assert await db_session.scalar(select(func.count()).select_from(User)) == 5
 
 
@@ -71,7 +71,7 @@ async def test_system_roles_created(db_session: AsyncSession):
     await db_session.commit()
     result = await db_session.execute(select(Role).where(Role.is_system.is_(True)))
     codes = {r.code for r in result.scalars().all()}
-    assert codes == {"admin", "rssi", "consultant", "soc", "metier"}
+    assert codes == {"superadmin", "admin", "rssi", "consultant", "soc", "metier"}
 
 
 @pytest.mark.asyncio
@@ -113,7 +113,7 @@ async def test_list_users_hides_password_hash(db_session: AsyncSession):
 async def test_disable_enable_user(db_session: AsyncSession):
     await run_admin_seed(db_session)
     await db_session.commit()
-    result = await db_session.execute(select(User).where(User.username == "consultant"))
+    result = await db_session.execute(select(User).where(User.username == "demo"))
     user = result.scalar_one()
     disabled = await disable_user(db_session, user.id)
     assert disabled.status == "disabled"
@@ -125,14 +125,14 @@ async def test_disable_enable_user(db_session: AsyncSession):
 async def test_reset_password(db_session: AsyncSession):
     await run_admin_seed(db_session)
     await db_session.commit()
-    result = await db_session.execute(select(User).where(User.username == "soc"))
+    result = await db_session.execute(select(User).where(User.username == "admin1"))
     user = result.scalar_one()
     old_hash = user.password_hash
-    await reset_password(db_session, user.id, "NewSoc@456")
+    await reset_password(db_session, user.id, "NewAdmin1@456")
     await db_session.commit()
     refreshed = await db_session.get(User, user.id)
     assert refreshed.password_hash != old_hash
-    assert verify_password("NewSoc@456", refreshed.password_hash)
+    assert verify_password("NewAdmin1@456", refreshed.password_hash)
 
 
 @pytest.mark.asyncio
@@ -224,7 +224,7 @@ async def test_admin_api_users(db_session: AsyncSession):
 
         roles = await client.get("/api/admin/roles")
         assert roles.status_code == 200
-        assert roles.json()["total"] == 5
+        assert roles.json()["total"] == 6
 
         perms = await client.get("/api/admin/permissions")
         assert perms.status_code == 200

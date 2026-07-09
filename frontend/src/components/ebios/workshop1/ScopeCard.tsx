@@ -5,15 +5,26 @@ import {
   scopeFromRecord,
   type ScopeFormData,
 } from "./constants";
+import ProposalActions, { proposalStatusClass, proposalStatusLabel } from "./ProposalStatus";
 import RecordFormModal, { FormField, FormInput, FormTextarea } from "./RecordFormModal";
 
 type Props = {
   records: EbiosRecord[];
   onSave: (data: ScopeFormData, existingId?: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onValidate: (id: string) => Promise<void>;
+  onReject: (id: string) => Promise<void>;
+  onRestore: (id: string) => Promise<void>;
 };
 
-export default function ScopeCard({ records, onSave, onDelete }: Props) {
+export default function ScopeCard({
+  records,
+  onSave,
+  onDelete,
+  onValidate,
+  onReject,
+  onRestore,
+}: Props) {
   const scope = records.find((r) => r.record_type === "security_scope");
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -64,6 +75,11 @@ export default function ScopeCard({ records, onSave, onDelete }: Props) {
           <li>
             <div className="eb-card-item-main">
               <strong>{scope.label}</strong>
+              {proposalStatusLabel(scope.status) && (
+                <span className={`eb-status-badge ${proposalStatusClass(scope.status)}`}>
+                  {proposalStatusLabel(scope.status)}
+                </span>
+              )}
               {scope.description && <p>{scope.description}</p>}
               <div className="eb-card-meta">
                 {scope.properties.business_objectives ? (
@@ -75,6 +91,12 @@ export default function ScopeCard({ records, onSave, onDelete }: Props) {
               </div>
             </div>
             <div className="eb-card-item-actions">
+              <ProposalActions
+                status={scope.status}
+                onValidate={() => onValidate(scope.id)}
+                onReject={() => onReject(scope.id)}
+                onRestore={() => onRestore(scope.id)}
+              />
               <button type="button" className="eb-btn eb-btn-ghost" onClick={openEdit}>
                 Modifier
               </button>

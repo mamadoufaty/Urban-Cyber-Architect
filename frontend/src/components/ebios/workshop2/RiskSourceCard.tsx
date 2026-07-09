@@ -6,14 +6,45 @@ import RecordFormModal, {
   FormSelect,
   FormTextarea,
 } from "../workshop1/RecordFormModal";
+import ProposalActions, { proposalStatusClass, proposalStatusLabel } from "../workshop1/ProposalStatus";
 import {
+  CONFIDENCE_CLASS,
   EMPTY_RISK_SOURCE,
   SEVERITY_CLASS,
   SEVERITY_LEVELS,
   isRiskSourceComplete,
+  riskSourceConfidence,
   riskSourceFromRecord,
+  riskSourceJustification,
   type RiskSourceFormData,
 } from "./constants";
+
+const MAX_LINKED_NAMES_SHOWN = 5;
+
+function LinkedNames({
+  ids,
+  lookup,
+  emptyLabel,
+}: {
+  ids: string[];
+  lookup: Map<string, string>;
+  emptyLabel: string;
+}) {
+  if (!ids.length) {
+    return <p className="eb-linked-empty">{emptyLabel}</p>;
+  }
+  const names = ids.map((id) => lookup.get(id) ?? "Élément supprimé");
+  const shown = names.slice(0, MAX_LINKED_NAMES_SHOWN);
+  const remaining = names.length - shown.length;
+  return (
+    <ul className="eb-linked-names">
+      {shown.map((name, idx) => (
+        <li key={`${name}-${idx}`}>{name}</li>
+      ))}
+      {remaining > 0 ? <li className="eb-linked-names-more">… +{remaining} autre(s)</li> : null}
+    </ul>
+  );
+}
 
 type Props = {
   records: EbiosRecord[];
@@ -21,6 +52,9 @@ type Props = {
   supportingAssets: EbiosRecord[];
   onSave: (data: RiskSourceFormData, existingId?: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onValidate: (id: string) => Promise<void>;
+  onReject: (id: string) => Promise<void>;
+  onRestore: (id: string) => Promise<void>;
 };
 
 function MultiSelect({
@@ -66,6 +100,9 @@ export default function RiskSourceCard({
   supportingAssets,
   onSave,
   onDelete,
+  onValidate,
+  onReject,
+  onRestore,
 }: Props) {
   const items = records.filter((r) => r.record_type === "risk_source");
   const [open, setOpen] = useState(false);
@@ -84,6 +121,14 @@ export default function RiskSourceCard({
     label: a.label,
     hint: a.properties.entity_type ? String(a.properties.entity_type) : undefined,
   }));
+
+  const stakeholderNameById = new Map(
+    stakeholders.map((s) => [
+      s.id,
+      s.properties.role ? `${s.label} (${String(s.properties.role)})` : s.label,
+    ])
+  );
+  const assetNameById = new Map(supportingAssets.map((a) => [a.id, a.label]));
 
   const openCreate = () => {
     setEditId(undefined);
@@ -135,6 +180,8 @@ export default function RiskSourceCard({
           {items.map((item) => {
             const data = riskSourceFromRecord(item);
             const complete = isRiskSourceComplete(item);
+            const justification = riskSourceJustification(item);
+            const confidence = riskSourceConfidence(item);
             return (
               <li key={item.id}>
                 <div className="eb-card-item-main">
@@ -143,7 +190,21 @@ export default function RiskSourceCard({
                     <span className={`eb-severity-badge ${SEVERITY_CLASS[data.severity] ?? ""}`}>
                       {data.severity}
                     </span>
+                    {proposalStatusLabel(item.status) && (
+                      <span className={`eb-status-badge ${proposalStatusClass(item.status)}`}>
+                        {proposalStatusLabel(item.status)}
+                      </span>
+                    )}
                     {!complete ? <span className="eb-incomplete-badge">Incomplet</span> : null}
+                    {confidence.label ? (
+                      <span
+                        className={`eb-confidence-badge ${CONFIDENCE_CLASS[confidence.label] ?? ""}`}
+                        title="Niveau de confiance indicatif de la proposition automatique"
+                      >
+                        Confiance IA : {confidence.label}
+                        {confidence.score !== null ? ` (${confidence.score}%)` : ""}
+                      </span>
+                    ) : null}
                   </div>
                   {data.target_objective ? (
                     <p>
@@ -155,13 +216,49 @@ export default function RiskSourceCard({
                       <span className="eb-field-label">Événement redouté :</span> {data.feared_event}
                     </p>
                   ) : null}
-                  <div className="eb-card-meta">
-                    <span>{data.stakeholder_ids.length} partie(s) prenante(s)</span>
-                    <span>{data.supporting_asset_ids.length} bien(s) support</span>
+
+                  {justification.length > 0 ? (
+                    <div className="eb-justification">
+                      <span className="eb-field-label">Justification IA :</span>
+                      <ul className="eb-justification-list">
+                        {justification.map((bullet, idx) => (
+                          <li key={idx}>{bullet}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  <div className="eb-risk-source-linked">
+                    <div>
+                      <span className="eb-field-label">
+                        Biens supports ({data.supporting_asset_ids.length}) :
+                      </span>
+                      <LinkedNames
+                        ids={data.supporting_asset_ids}
+                        lookup={assetNameById}
+                        emptyLabel="Aucun bien support lié."
+                      />
+                    </div>
+                    <div>
+                      <span className="eb-field-label">
+                        Parties prenantes ({data.stakeholder_ids.length}) :
+                      </span>
+                      <LinkedNames
+                        ids={data.stakeholder_ids}
+                        lookup={stakeholderNameById}
+                        emptyLabel="Aucune partie prenante liée."
+                      />
+                    </div>
                   </div>
                   {data.comment ? <p className="eb-risk-comment">{data.comment}</p> : null}
                 </div>
                 <div className="eb-card-item-actions">
+                  <ProposalActions
+                    status={item.status}
+                    onValidate={() => onValidate(item.id)}
+                    onReject={() => onReject(item.id)}
+                    onRestore={() => onRestore(item.id)}
+                  />
                   <button type="button" className="eb-btn eb-btn-ghost" onClick={() => openEdit(item)}>
                     Modifier
                   </button>

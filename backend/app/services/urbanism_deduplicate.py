@@ -19,6 +19,13 @@ def _relation_tuple(rel: UrbanismRelation) -> tuple[UUID, str, UUID]:
     return (rel.source_id, rel.relation_type, rel.target_id)
 
 
+def _scope_stmt(model, project_id: UUID, cartography_version_id: UUID | None):
+    stmt = select(model).where(model.project_id == project_id)
+    if cartography_version_id is not None:
+        stmt = stmt.where(model.cartography_version_id == cartography_version_id)
+    return stmt
+
+
 async def _purge_non_official_relations(
     session: AsyncSession,
     project_id: UUID,
@@ -45,27 +52,28 @@ async def _purge_non_official_relations(
 async def deduplicate_project(
     session: AsyncSession,
     project_id: UUID,
+    cartography_version_id: UUID | None = None,
 ) -> dict[str, Any]:
     entities = list(
         (await session.execute(
-            select(UrbanismEntity).where(UrbanismEntity.project_id == project_id)
+            _scope_stmt(UrbanismEntity, project_id, cartography_version_id)
         )).scalars()
     )
     relations = list(
         (await session.execute(
-            select(UrbanismRelation).where(UrbanismRelation.project_id == project_id)
+            _scope_stmt(UrbanismRelation, project_id, cartography_version_id)
         )).scalars()
     )
 
     await _purge_non_official_relations(session, project_id, entities, relations)
     entities = list(
         (await session.execute(
-            select(UrbanismEntity).where(UrbanismEntity.project_id == project_id)
+            _scope_stmt(UrbanismEntity, project_id, cartography_version_id)
         )).scalars()
     )
     relations = list(
         (await session.execute(
-            select(UrbanismRelation).where(UrbanismRelation.project_id == project_id)
+            _scope_stmt(UrbanismRelation, project_id, cartography_version_id)
         )).scalars()
     )
 
@@ -128,12 +136,12 @@ async def deduplicate_project(
 
     entities = list(
         (await session.execute(
-            select(UrbanismEntity).where(UrbanismEntity.project_id == project_id)
+            _scope_stmt(UrbanismEntity, project_id, cartography_version_id)
         )).scalars()
     )
     relations = list(
         (await session.execute(
-            select(UrbanismRelation).where(UrbanismRelation.project_id == project_id)
+            _scope_stmt(UrbanismRelation, project_id, cartography_version_id)
         )).scalars()
     )
 

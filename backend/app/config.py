@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Urban Cyber Architect"
     debug: bool = False
+    enable_bootstrap_admin: bool = False
   # SQLite par défaut (dev local sans Docker). PostgreSQL via DATABASE_URL.
     database_url: str = "sqlite+aiosqlite:///./urban_cyber_architect.db"
     knowledge_base_path: str = str(_PROJECT_ROOT / "knowledge-base")

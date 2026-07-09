@@ -13,11 +13,26 @@ from app.models.entities import UrbanismEntity, UrbanismRelation
 async def load_urbanism_graph(
     db: AsyncSession, project_id: UUID
 ) -> tuple[list[UrbanismEntity], list[UrbanismRelation]]:
+    """Charge le graphe de la cartographie active du projet (lecture seule).
+
+    EBIOS RM, le générateur de livrables et la corrélation SOC raisonnent sur
+    « la » cartographie d'un projet : depuis l'introduction du multi-cartographies
+    (plusieurs cartes indépendantes par projet), ils continuent de s'appuyer sur
+    la cartographie active par défaut plutôt que d'agréger toutes les cartes du
+    projet, afin qu'aucune donnée ne soit mélangée entre cartes indépendantes.
+    """
+    from app.services import cartography_service
+
+    try:
+        _cartography, version = await cartography_service.resolve_read_version(db, project_id)
+    except cartography_service.CartographyError:
+        return [], []
+
     entities = list(
         (
             await db.execute(
                 select(UrbanismEntity)
-                .where(UrbanismEntity.project_id == project_id)
+                .where(UrbanismEntity.cartography_version_id == version.id)
                 .order_by(UrbanismEntity.entity_type, UrbanismEntity.label)
             )
         ).scalars().all()
@@ -25,7 +40,9 @@ async def load_urbanism_graph(
     relations = list(
         (
             await db.execute(
-                select(UrbanismRelation).where(UrbanismRelation.project_id == project_id)
+                select(UrbanismRelation).where(
+                    UrbanismRelation.cartography_version_id == version.id
+                )
             )
         ).scalars().all()
     )

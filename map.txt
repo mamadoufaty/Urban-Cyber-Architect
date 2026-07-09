@@ -1,0 +1,13 @@
+| Version                                   | Statut                                                 |
+| ----------------------------------------- | ------------------------------------------------------ |
+| V1.1 — Auth + Administration utilisateurs | ✅ Terminée                                             |
+| V1.2 — Administration avancée             | 🔵 À commencer maintenant   (terminé)                           |
+| V1.3 — Gestion des projets                | ⏳ Après V1.2                                           |
+| V1.4 — Urbanisme SI                       | Déjà partiellement avancé, mais à stabiliser plus tard |
+| V1.5 — EBIOS RM                           | Déjà partiellement avancé                              |
+| V1.6 — GRC                                | Déjà partiellement avancé                              |
+| V1.7 — SOC                                | Déjà partiellement avancé                              |
+| V1.8 — Wazuh                              | Déjà partiellement avancé                              |
+| V1.9 — IA                                 | Partiellement présent                                  |
+| V2.0 — Moteur IA livrables                | Plus tard                                              |
+-

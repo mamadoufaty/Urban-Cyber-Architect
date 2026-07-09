@@ -1,8 +1,21 @@
-"""Initialisation idempotente — données Administration."""
+"""Initialisation idempotente — données Administration.
+
+Seed des utilisateurs de démonstration
+--------------------------------------
+Emplacement : ``backend/app/services/admin/seed_service.py`` (constante ``DEMO_USERS``).
+
+Déclenchement : au démarrage de l'API via ``run_admin_seed`` appelé dans le
+``lifespan`` de ``backend/app/main.py``.
+
+Méthode :
+- pour chaque compte de ``DEMO_USERS``, recherche par ``User.username`` ;
+- création uniquement si le login est absent (pas de doublon, pas de mise à jour) ;
+- mot de passe haché avec ``app.services.password_service.hash_password`` (bcrypt).
+"""
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin import Organization, Permission, Role, RolePermission, User
@@ -15,6 +28,7 @@ DEFAULT_ORG = {
 }
 
 SYSTEM_ROLES = [
+    ("Super Administrateur", "superadmin", "Accès super administrateur à la plateforme", True),
     ("Administrateur", "admin", "Accès complet à la plateforme", True),
     ("RSSI", "rssi", "Pilotage cybersécurité et GRC", True),
     ("Consultant", "consultant", "Accompagnement projet et urbanisme", True),
@@ -45,6 +59,7 @@ BASE_PERMISSIONS: list[tuple[str, str, str, str]] = [
 ALL_PERMISSION_CODES = [p[2] for p in BASE_PERMISSIONS]
 
 ROLE_PERMISSION_CODES: dict[str, list[str]] = {
+    "superadmin": ALL_PERMISSION_CODES,
     "admin": ALL_PERMISSION_CODES,
     "rssi": [
         "dashboard:read",
@@ -91,12 +106,13 @@ ROLE_PERMISSION_CODES: dict[str, list[str]] = {
     ],
 }
 
-INITIAL_USERS: list[tuple[str, str, str, str]] = [
-    ("admin", "Admin@123", "admin", "Administrateur"),
-    ("rssi", "Rssi@123", "rssi", "RSSI"),
-    ("consultant", "Consultant@123", "consultant", "Consultant"),
-    ("soc", "Soc@123", "soc", "Analyste SOC"),
-    ("metier", "Metier@123", "metier", "Utilisateur métier"),
+# (username, mot de passe en clair, code rôle, libellé affiché)
+DEMO_USERS: list[tuple[str, str, str, str]] = [
+    ("admin", "Admin@123", "superadmin", "Super Administrateur"),
+    ("admin1", "Admin1@123", "admin", "Administrateur 1"),
+    ("admin2", "Admin2@123", "admin", "Administrateur 2"),
+    ("admin3", "Admin3@123", "admin", "Administrateur 3"),
+    ("demo", "Demo@123", "consultant", "Consultant démo"),
 ]
 
 
@@ -137,6 +153,35 @@ async def _get_or_create_permission(
     return perm
 
 
+async def _get_user_by_username(db: AsyncSession, username: str) -> User | None:
+    result = await db.execute(select(User).where(User.username == username))
+    return result.scalar_one_or_none()
+
+
+async def _ensure_demo_user(
+    db: AsyncSession,
+    org: Organization,
+    roles_by_code: dict[str, Role],
+    username: str,
+    password: str,
+    role_code: str,
+    display: str,
+) -> None:
+    if await _get_user_by_username(db, username):
+        return
+    role = roles_by_code[role_code]
+    db.add(
+        User(
+            username=username,
+            password_hash=hash_password(password),
+            first_name=display,
+            organization_id=org.id,
+            role_id=role.id,
+            status="active",
+        )
+    )
+
+
 async def _ensure_role_permission(db: AsyncSession, role: Role, permission: Permission) -> None:
     result = await db.execute(
         select(RolePermission).where(
@@ -150,7 +195,7 @@ async def _ensure_role_permission(db: AsyncSession, role: Role, permission: Perm
 
 
 async def run_admin_seed(db: AsyncSession) -> None:
-    """Seed idempotent — organisations, rôles, permissions, utilisateurs initiaux."""
+    """Seed idempotent — organisations, rôles, permissions, utilisateurs de démo."""
     org = await _get_or_create_organization(db)
 
     permissions_by_code: dict[str, Permission] = {}
@@ -168,22 +213,12 @@ async def run_admin_seed(db: AsyncSession) -> None:
             if perm:
                 await _ensure_role_permission(db, role, perm)
 
-    user_count = await db.scalar(select(func.count()).select_from(User))
-    if user_count and user_count > 0:
-        return
+    for username, password, role_code, display in DEMO_USERS:
+        await _ensure_demo_user(db, org, roles_by_code, username, password, role_code, display)
 
-    for username, password, role_code, display in INITIAL_USERS:
-        role = roles_by_code[role_code]
-        db.add(
-            User(
-                username=username,
-                password_hash=hash_password(password),
-                first_name=display,
-                organization_id=org.id,
-                role_id=role.id,
-                status="active",
-            )
-        )
+    from app.services.admin.referential_service import run_referential_seed
+
+    await run_referential_seed(db)
 
 
 async def verify_seed_password(username: str, plain_password: str, db: AsyncSession) -> bool:

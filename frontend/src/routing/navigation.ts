@@ -29,6 +29,7 @@ export const URBANISM_NAV: NavSection = {
   module: "urbanism",
   items: [
     { path: "/schema-urbanisme", label: "Moteur d'urbanisme", module: "urbanism" },
+    { path: "/import-cartographie", label: "Importer une cartographie", module: "urbanism" },
     { path: "/validation-metamodele", label: "Validation métamodèle", module: "urbanism" },
     { path: "/objectifs", label: "Objectifs", module: "urbanism" },
     { path: "/metiers", label: "Métiers", module: "urbanism" },
@@ -67,7 +68,7 @@ export const CYBER_NAV: NavSection = {
     { path: "/declaration-applicabilite", label: "Déclaration d'applicabilité", module: "grc" },
     { path: "/plan-traitement-risques", label: "Plan de traitement des risques", module: "grc" },
     { path: "/architecture", label: "Architecture Cyber", module: "grc" },
-    { path: "/livrables", label: "Livrables", module: "grc" },
+    { path: "/livrables", label: "Livrables EBIOS RM", module: "grc" },
   ],
 };
 
@@ -87,7 +88,8 @@ export const ADMIN_NAV: NavSection = {
   title: "Administration",
   module: "administration",
   items: [{ path: "/administration/users", label: "Utilisateurs", module: "administration" },
-    { path: "/administration/organizations", label: "Organisations", module: "administration" }],
+    { path: "/administration/organizations", label: "Organisations", module: "administration" },
+    { path: "/administration/referentials", label: "Référentiels", module: "administration" }],
 };
 
 export const NAV_SECTIONS: NavSection[] = [

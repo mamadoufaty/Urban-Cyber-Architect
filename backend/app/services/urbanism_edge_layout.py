@@ -52,11 +52,32 @@ def parse_derived_fonc_applic_edge(edge_id: str) -> tuple[UUID, UUID] | None:
         return None
 
 
+def _relation_owned(
+    rel: UrbanismRelation | None, project_id: UUID, cartography_version_id: UUID | None
+) -> bool:
+    if not rel or rel.project_id != project_id:
+        return False
+    if cartography_version_id is not None and rel.cartography_version_id != cartography_version_id:
+        return False
+    return True
+
+
+def _entity_owned(
+    entity: UrbanismEntity | None, project_id: UUID, cartography_version_id: UUID | None
+) -> bool:
+    if not entity or entity.project_id != project_id:
+        return False
+    if cartography_version_id is not None and entity.cartography_version_id != cartography_version_id:
+        return False
+    return True
+
+
 async def save_edge_layout(
     db: AsyncSession,
     project_id: UUID,
     edge_id: str,
     layout: dict[str, Any],
+    cartography_version_id: UUID | None = None,
 ) -> dict[str, Any]:
     """Enregistre un tracé verrouillé pour une relation persistée ou dérivée."""
     layout = {**layout, "mode": "manual", "locked": True, "pathType": layout.get("pathType") or "custom"}
@@ -68,7 +89,7 @@ async def save_edge_layout(
 
     if relation_id is not None:
         rel = await db.get(UrbanismRelation, relation_id)
-        if not rel or rel.project_id != project_id:
+        if not _relation_owned(rel, project_id, cartography_version_id):
             raise ValueError("Relation introuvable")
         props = dict(rel.properties or {})
         props["layout"] = layout
@@ -83,7 +104,7 @@ async def save_edge_layout(
         raise ValueError("Identifiant de lien invalide")
     _source_id, target_id = parsed
     entity = await db.get(UrbanismEntity, target_id)
-    if not entity or entity.project_id != project_id:
+    if not _entity_owned(entity, project_id, cartography_version_id):
         raise ValueError("Entité cible du lien dérivé introuvable")
     props = dict(entity.properties or {})
     layouts = dict(props.get(EDGE_LAYOUTS_KEY) or {})
@@ -100,6 +121,7 @@ async def clear_edge_layout(
     db: AsyncSession,
     project_id: UUID,
     edge_id: str,
+    cartography_version_id: UUID | None = None,
 ) -> None:
     """Supprime le verrouillage — le moteur recalculera le tracé."""
     try:
@@ -109,7 +131,7 @@ async def clear_edge_layout(
 
     if relation_id is not None:
         rel = await db.get(UrbanismRelation, relation_id)
-        if not rel or rel.project_id != project_id:
+        if not _relation_owned(rel, project_id, cartography_version_id):
             raise ValueError("Relation introuvable")
         props = dict(rel.properties or {})
         props.pop("layout", None)
@@ -123,7 +145,7 @@ async def clear_edge_layout(
         raise ValueError("Identifiant de lien invalide")
     _source_id, target_id = parsed
     entity = await db.get(UrbanismEntity, target_id)
-    if not entity or entity.project_id != project_id:
+    if not _entity_owned(entity, project_id, cartography_version_id):
         raise ValueError("Entité cible du lien dérivé introuvable")
     props = dict(entity.properties or {})
     layouts = dict(props.get(EDGE_LAYOUTS_KEY) or {})

@@ -35,6 +35,26 @@ export function riskSourceFromRecord(record: import("../types").EbiosRecord): Ri
   };
 }
 
+export function riskSourceJustification(record: import("../types").EbiosRecord): string[] {
+  const value = record.properties?.justification;
+  return Array.isArray(value) ? value.map(String).filter((v) => v.trim() !== "") : [];
+}
+
+export type RiskSourceConfidence = { score: number | null; label: string | null };
+
+export function riskSourceConfidence(record: import("../types").EbiosRecord): RiskSourceConfidence {
+  const p = record.properties ?? {};
+  const score = typeof p.confidence_score === "number" ? p.confidence_score : null;
+  const label = typeof p.confidence_label === "string" ? p.confidence_label : null;
+  return { score, label };
+}
+
+export const CONFIDENCE_CLASS: Record<string, string> = {
+  Élevée: "confidence-high",
+  Moyenne: "confidence-medium",
+  Faible: "confidence-low",
+};
+
 export function isRiskSourceComplete(record: import("../types").EbiosRecord): boolean {
   const data = riskSourceFromRecord(record);
   return (

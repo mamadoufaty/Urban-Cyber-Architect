@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 class EbiosAssessmentCreate(BaseModel):
     title: str = "Analyse EBIOS RM"
     description: str | None = None
+    cartography_id: UUID | None = None
 
 
 class EbiosAssessmentUpdate(BaseModel):
@@ -26,6 +27,7 @@ class EbiosAssessmentUpdate(BaseModel):
 class EbiosAssessmentResponse(BaseModel):
     id: UUID
     project_id: UUID
+    cartography_id: UUID | None
     title: str
     description: str | None
     status: str
@@ -136,6 +138,16 @@ class EbiosGenerateScenariosResponse(BaseModel):
     records: list[EbiosRecordResponse]
 
 
+class EbiosGenerateWorkshop1Response(BaseModel):
+    generated_count: int
+    records: list[EbiosRecordResponse]
+
+
+class EbiosGenerateWorkshop2Response(BaseModel):
+    generated_count: int
+    records: list[EbiosRecordResponse]
+
+
 class EbiosWorkshop4Response(BaseModel):
     scenarios: list[EbiosRecordResponse]
     validated_strategic_count: int
@@ -188,3 +200,24 @@ class EbiosRiskEvaluationPatch(BaseModel):
 
 class EbiosRecordPropertiesPatch(BaseModel):
     properties: dict[str, Any]
+
+
+class EbiosDeliverableSection(BaseModel):
+    id: str
+    title: str
+    content: str | None = None
+    bullets: list[str] = Field(default_factory=list)
+
+
+class EbiosDeliverableResponse(BaseModel):
+    deliverable_type: str
+    title: str
+    project_id: UUID
+    project_name: str
+    assessment_id: UUID
+    generated_at: datetime
+    overall_progress_percent: int
+    is_complete: bool
+    completeness_warning: str | None = None
+    sections: list[EbiosDeliverableSection] = Field(default_factory=list)
+    data: dict[str, Any] = Field(default_factory=dict)

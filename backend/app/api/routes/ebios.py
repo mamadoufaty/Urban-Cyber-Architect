@@ -14,6 +14,8 @@ from app.schemas.ebios import (
     EbiosAssessmentUpdate,
     EbiosGenerateOperationalResponse,
     EbiosGenerateScenariosResponse,
+    EbiosGenerateWorkshop1Response,
+    EbiosGenerateWorkshop2Response,
     EbiosLinkCreate,
     EbiosLinkResponse,
     EbiosOverviewResponse,
@@ -37,14 +39,19 @@ from app.services.ebios.assessment_service import (
     get_assessment,
     get_or_create_assessment,
     get_workshop,
+    list_assessments,
     list_records,
     list_workshops,
 )
 from app.services.ebios.registry import get_extension_registry
 from app.services.ebios.urbanism_import import import_urbanism_supporting_assets
-from app.services.ebios.workshop1_service import recalculate_workshop1_progress
+from app.services.ebios.workshop1_service import (
+    generate_workshop1_from_cartography,
+    recalculate_workshop1_progress,
+)
 from app.services.ebios.workshop2_service import (
     cleanup_risk_source_graph,
+    generate_workshop2_risk_sources,
     recalculate_workshop2_progress,
     sync_risk_source_graph,
 )
@@ -87,10 +94,31 @@ async def get_ebios_extensions():
 
 
 @router.get("/projects/{project_id}/ebios/assessment", response_model=EbiosAssessmentResponse)
-async def get_project_ebios_assessment(project_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_project_ebios_assessment(
+    project_id: UUID,
+    cartography_id: UUID | None = Query(
+        None, description="Cartographie ciblée — par défaut la cartographie active du projet."
+    ),
+    db: AsyncSession = Depends(get_db),
+):
     try:
-        assessment = await get_or_create_assessment(db, project_id)
+        assessment = await get_or_create_assessment(db, project_id, cartography_id)
         return assessment
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+@router.get(
+    "/projects/{project_id}/ebios/assessments",
+    response_model=list[EbiosAssessmentResponse],
+)
+async def get_project_ebios_assessments(
+    project_id: UUID,
+    cartography_id: UUID | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await list_assessments(db, project_id, cartography_id)
     except ValueError as e:
         raise HTTPException(404, str(e)) from e
 
@@ -100,7 +128,9 @@ async def post_ebios_assessment(
     project_id: UUID, data: EbiosAssessmentCreate, db: AsyncSession = Depends(get_db)
 ):
     try:
-        return await create_assessment(db, project_id, data.title, data.description)
+        return await create_assessment(
+            db, project_id, data.title, data.description, data.cartography_id
+        )
     except ValueError as e:
         raise HTTPException(404, str(e)) from e
 
@@ -327,6 +357,27 @@ async def delete_ebios_record(
 
 
 @router.post(
+    "/projects/{project_id}/ebios/assessments/{assessment_id}/workshop1/generate-from-cartography",
+    response_model=EbiosGenerateWorkshop1Response,
+)
+async def post_generate_workshop1_from_cartography(
+    project_id: UUID,
+    assessment_id: UUID,
+    regenerate: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        await get_assessment(db, project_id, assessment_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+    records = await generate_workshop1_from_cartography(
+        db, assessment_id, project_id, regenerate=regenerate
+    )
+    await recalculate_workshop1_progress(db, assessment_id)
+    return {"generated_count": len(records), "records": records}
+
+
+@router.post(
     "/projects/{project_id}/ebios/assessments/{assessment_id}/workshop2/import-urbanism-assets",
     response_model=EbiosUrbanismImportResponse,
 )
@@ -339,6 +390,27 @@ async def post_import_urbanism_assets(
         raise HTTPException(404, str(e)) from e
     records, count = await import_urbanism_supporting_assets(db, assessment.id, project_id)
     return {"imported_count": count, "records": records}
+
+
+@router.post(
+    "/projects/{project_id}/ebios/assessments/{assessment_id}/workshop2/generate-risk-sources",
+    response_model=EbiosGenerateWorkshop2Response,
+)
+async def post_generate_workshop2_risk_sources(
+    project_id: UUID,
+    assessment_id: UUID,
+    regenerate: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        await get_assessment(db, project_id, assessment_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+    records = await generate_workshop2_risk_sources(
+        db, assessment_id, project_id, regenerate=regenerate
+    )
+    await recalculate_workshop2_progress(db, assessment_id)
+    return {"generated_count": len(records), "records": records}
 
 
 @router.post(
@@ -355,7 +427,9 @@ async def post_generate_strategic_scenarios(
         await get_assessment(db, project_id, assessment_id)
     except ValueError as e:
         raise HTTPException(404, str(e)) from e
-    records = await generate_strategic_scenarios(db, assessment_id, regenerate=regenerate)
+    records = await generate_strategic_scenarios(
+        db, assessment_id, project_id, regenerate=regenerate
+    )
     await recalculate_workshop3_progress(db, assessment_id)
     return {"generated_count": len(records), "records": records}
 

@@ -12,12 +12,23 @@ from app.database import Base
 
 
 class EbiosAssessment(Base):
-    """Analyse de risques EBIOS RM rattachée à un projet."""
+    """Analyse de risques EBIOS RM rattachée à un projet et à une cartographie.
+
+    Chaque étude (« study ») est identifiée par son ``id`` (le study_id) et est
+    strictement isolée : deux études — même au sein d'un même projet — ne
+    partagent jamais leurs ateliers, enregistrements ou liens. Le rattachement
+    à ``cartography_id`` garantit qu'une nouvelle cartographie démarre toujours
+    une étude EBIOS vierge plutôt que de réutiliser l'étude d'une cartographie
+    précédente (§ isolation des études).
+    """
 
     __tablename__ = "ebios_assessments"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"), index=True)
+    cartography_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cartographies.id"), nullable=True, index=True
+    )
     title: Mapped[str] = mapped_column(String(255), default="Analyse EBIOS RM")
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="draft", index=True)

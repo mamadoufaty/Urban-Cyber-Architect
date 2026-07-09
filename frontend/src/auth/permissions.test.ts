@@ -2,10 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   canAccessPath,
   hasPermission,
+  isAdminRole,
   ROLE_PERMISSIONS,
 } from "../auth/permissions";
 
 describe("ROLE_PERMISSIONS", () => {
+  it("superadmin has all modules like admin", () => {
+    expect(ROLE_PERMISSIONS.superadmin).toHaveLength(8);
+    expect(hasPermission("superadmin", "administration")).toBe(true);
+    expect(hasPermission("superadmin", "grc")).toBe(true);
+  });
+
   it("admin has all modules", () => {
     expect(ROLE_PERMISSIONS.admin).toHaveLength(8);
     expect(hasPermission("admin", "grc")).toBe(true);
@@ -67,5 +74,22 @@ describe("canAccessPath", () => {
 
   it("allows admin on administration organizations path", () => {
     expect(canAccessPath("admin", "/administration/organizations")).toBe(true);
+  });
+});
+
+describe("isAdminRole", () => {
+  it("recognizes admin and superadmin as admin roles", () => {
+    expect(isAdminRole("admin")).toBe(true);
+    expect(isAdminRole("superadmin")).toBe(true);
+  });
+
+  it("rejects non-admin roles and empty values", () => {
+    expect(isAdminRole("rssi")).toBe(false);
+    expect(isAdminRole("consultant")).toBe(false);
+    expect(isAdminRole("soc")).toBe(false);
+    expect(isAdminRole("metier")).toBe(false);
+    expect(isAdminRole(undefined)).toBe(false);
+    expect(isAdminRole(null)).toBe(false);
+    expect(isAdminRole("")).toBe(false);
   });
 });
